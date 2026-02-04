@@ -13,7 +13,7 @@ def call_claude_with_mcp(message, conversation_history=None):
     """
     try:
         # Build the prompt with conversation history
-        if conversation_history:
+        if conversation_history and len(conversation_history) > 0:
             # Format conversation history
             context = "\n\n".join([
                 f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
@@ -23,9 +23,10 @@ def call_claude_with_mcp(message, conversation_history=None):
         else:
             full_prompt = message
         
-        # Call Claude Code CLI
+        # Call Claude Code CLI using stdin for non-interactive execution
         result = subprocess.run(
-            ['claude', '-p', full_prompt],
+            ['claude'],
+            input=full_prompt,
             capture_output=True,
             text=True,
             timeout=120,
