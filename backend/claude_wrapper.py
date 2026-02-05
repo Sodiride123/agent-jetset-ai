@@ -30,7 +30,8 @@ def call_claude_with_mcp(message, conversation_history=None):
             capture_output=True,
             text=True,
             timeout=120,
-            cwd='/workspace/jetset-ai'
+            cwd='/workspace',
+            stdin=subprocess.DEVNULL  # Prevent hanging on stdin
         )
         
         if result.returncode == 0:
