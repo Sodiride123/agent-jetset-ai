@@ -30,8 +30,7 @@ def call_claude_with_mcp(message, conversation_history=None):
             capture_output=True,
             text=True,
             timeout=120,
-            cwd='/workspace',
-            stdin=subprocess.DEVNULL  # Prevent hanging on stdin
+            cwd='/workspace'
         )
         
         if result.returncode == 0:
