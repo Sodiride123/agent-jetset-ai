@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime
 from claude_wrapper import call_claude_with_mcp, reformat_to_structured_json
+from log_monitor import ClaudeLogMonitor
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +29,9 @@ MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-5-20251101')
 
 # Store conversation history (in production, use a database)
 conversations = {}
+
+# Initialize log monitor
+log_monitor = ClaudeLogMonitor("jetset-ai")
 
 SYSTEM_PROMPT = """You are JetSet, a friendly and professional AI travel agent assistant. You help users search for flights using natural language.
 
@@ -171,6 +175,28 @@ def reset_conversation():
     except Exception as e:
         logger.error(f"Error resetting conversation: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/progress', methods=['GET'])
+def get_progress():
+    """Get current processing progress from Claude Code logs"""
+    try:
+        status = log_monitor.get_current_status()
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Error getting progress: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Error monitoring progress',
+            'progress': 0
+        }), 500
+
+@app.route('/api/monitor', methods=['GET'])
+def monitor_dashboard():
+    """Redirect to Claude Monitor dashboard"""
+    return jsonify({
+        'dashboard_url': 'http://localhost:9010',
+        'message': 'Claude Code monitoring dashboard is available at port 9010'
+    })
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 9000))

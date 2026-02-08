@@ -2,22 +2,30 @@
 
 A modern, full-stack web application that allows users to search for flights through natural language conversation with an AI-powered travel agent chatbot.
 
+**🆕 Now powered by Claude Code CLI with real-time progress monitoring and MCP integration!**
+
 ![JetSet AI](frontend/src/assets/jetset-mascot.png)
 
 ## 🌟 Features
 
 - **Natural Language Processing**: Ask for flights in plain English like "Find me a flight from NYC to London next Friday under $500"
-- **AI-Powered Search**: Powered by Claude AI with access to real-time flight data via booking.com MCP integration
+- **AI-Powered Search**: Powered by Claude Code CLI with access to real-time flight data via booking.com MCP integration
 - **Conversational Interface**: Chat with JetSet, your friendly AI travel assistant
 - **Modern UI/UX**: Clean, professional design with soft gradients, rounded corners, and smooth animations
 - **Real-time Results**: Get instant flight recommendations with prices, durations, airlines, and layover information
 - **Context-Aware**: Refine searches with follow-up questions like "show me cheaper options" or "what about direct flights only?"
+- **🆕 Real-time Progress Monitoring**: See live updates as Claude Code searches for flights
+- **🆕 Enhanced Loading Experience**: Progress bars, status messages, and travel tips while you wait
+- **🆕 Claude Monitor Dashboard**: Track token usage and performance metrics on port 9010
 
 ## 🎨 Design
 
 - **Frontend**: React + TypeScript with Vite
 - **Styling**: Tailwind CSS with custom gradient themes (purple-to-blue)
-- **Backend**: Flask (Python)
+- **Backend**: Flask (Python) with Claude Code CLI integration
+- **AI Engine**: Claude Code CLI with LiteLLM gateway
+- **MCP Integration**: booking.com for real-time flight data
+- **Monitoring**: Claude Monitor dashboard on port 9010
 - **AI**: Claude AI (Opus 4.5) via LiteLLM proxy
 - **Data**: booking.com MCP for real-time flight data
 

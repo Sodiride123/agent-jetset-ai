@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import mascotImage from '../assets/jetset-mascot.png';
 
+interface ProgressStatus {
+  status: string;
+  message: string;
+  progress: number;
+}
+
 const LoadingIndicator: React.FC = () => {
   const [currentMessage, setCurrentMessage] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [progressStatus, setProgressStatus] = useState<ProgressStatus | null>(null);
 
   const messages = [
     "Searching for the best flights...",
@@ -32,13 +39,37 @@ const LoadingIndicator: React.FC = () => {
       setElapsedTime((prev) => prev + 1);
     }, 1000);
 
+    // Poll progress endpoint every 2 seconds
+    const pollProgress = async () => {
+      try {
+        const response = await fetch('http://localhost:9002/api/progress');
+        if (response.ok) {
+          const data = await response.json();
+          setProgressStatus(data);
+        }
+      } catch (error) {
+        console.error('Error polling progress:', error);
+      }
+    };
+
+    // Initial poll
+    pollProgress();
+    
+    // Poll every 2 seconds
+    const progressInterval = setInterval(pollProgress, 2000);
+
     return () => {
       clearInterval(messageInterval);
       clearInterval(timeInterval);
+      clearInterval(progressInterval);
     };
   }, []);
 
   const tipIndex = Math.floor(elapsedTime / 5) % travelTips.length;
+
+  // Use progress status message if available, otherwise use rotating messages
+  const displayMessage = progressStatus?.message || messages[currentMessage];
+  const displayProgress = progressStatus?.progress || Math.min((elapsedTime / 60) * 100, 95);
 
   return (
     <div className="flex gap-3 mb-4 animate-fadeIn">
@@ -59,7 +90,7 @@ const LoadingIndicator: React.FC = () => {
               <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
             <span className="text-sm font-medium text-gray-700 animate-pulse">
-              {messages[currentMessage]}
+              {displayMessage}
             </span>
           </div>
 
@@ -68,10 +99,17 @@ const LoadingIndicator: React.FC = () => {
             <div 
               className="bg-gradient-to-r from-purple-500 to-blue-500 h-1.5 rounded-full transition-all duration-1000 ease-out"
               style={{ 
-                width: `${Math.min((elapsedTime / 60) * 100, 95)}%` 
+                width: `${displayProgress}%` 
               }}
             ></div>
           </div>
+
+          {/* Real-time Status from Claude Code */}
+          {progressStatus && progressStatus.status !== 'idle' && (
+            <div className="text-xs text-blue-600 bg-blue-50 rounded-lg p-2 animate-fadeIn">
+              🤖 Claude Code: {progressStatus.status}
+            </div>
+          )}
 
           {/* Time Estimate */}
           <div className="text-xs text-gray-500">
