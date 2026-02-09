@@ -22,6 +22,13 @@ ANTHROPIC_MODEL=$ANTHROPIC_MODEL
 FLASK_ENV=development
 PORT=9002
 EOF
+
+    # Update settings.json with credentials for Claude CLI
+    echo "📝 Updating settings.json with credentials..."
+    sed -i "s|PLACEHOLDER_API_KEY|$ANTHROPIC_API_KEY|g" settings.json
+    sed -i "s|PLACEHOLDER_BASE_URL|$ANTHROPIC_BASE_URL|g" settings.json
+    sed -i "s|PLACEHOLDER_MODEL|$ANTHROPIC_MODEL|g" settings.json
+
     echo "✅ Credentials updated successfully"
 else
     echo "⚠️  Warning: Claude settings file not found at $CLAUDE_SETTINGS"

@@ -4,12 +4,13 @@ import logging
 import requests
 import os
 import re
+import sys
 
 logger = logging.getLogger(__name__)
 
-def call_claude_with_mcp(message, conversation_history=None):
+def call_claude_with_mcp(message, conversation_history=None, system_prompt=None):
     """
-    Call Claude Code CLI with MCP tools enabled
+    Call Claude Code CLI with MCP tools enabled and system prompt for booking_com_client usage
     """
     try:
         # Build the prompt with conversation history
@@ -23,9 +24,17 @@ def call_claude_with_mcp(message, conversation_history=None):
         else:
             full_prompt = message
         
+        # Build Claude CLI command with system prompt and custom settings
+        settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'settings.json')
+        cmd = ['claude', '--print', '--settings', settings_path]
+        if system_prompt:
+            cmd.extend(['--system-prompt', system_prompt])
+        
+        logger.info(f"Running Claude CLI: {' '.join(cmd[:5])}...")
+        
         # Call Claude Code CLI using stdin for non-interactive execution
         result = subprocess.run(
-            ['claude'],
+            cmd,
             input=full_prompt,
             capture_output=True,
             text=True,
