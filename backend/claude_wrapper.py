@@ -68,8 +68,8 @@ def reformat_to_structured_json(raw_response, original_query):
     """
     try:
         api_key = os.getenv('ANTHROPIC_API_KEY')
-        base_url = os.getenv('ANTHROPIC_BASE_URL', 'http://44.251.199.189:4000/')
-        model = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-5-20251101')
+        base_url = os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
+        model = os.getenv('ANTHROPIC_MODEL', 'claude-3-opus-20240229')
         
         # Check if response contains flight data (tables, prices, etc.)
         has_flight_data = bool(re.search(r'\$\d+|£\d+|€\d+|\d+h\s*\d+m|flight|airline', raw_response, re.IGNORECASE))

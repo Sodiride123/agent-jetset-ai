@@ -24,8 +24,8 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # API Configuration
 API_KEY = os.getenv('ANTHROPIC_API_KEY')
-BASE_URL = os.getenv('ANTHROPIC_BASE_URL', 'http://44.251.199.189:4000/')
-MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-5-20251101')
+BASE_URL = os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
+MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-opus-20240229')
 
 # Store conversation history (in production, use a database)
 conversations = {}

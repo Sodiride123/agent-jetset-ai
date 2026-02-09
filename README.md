@@ -51,11 +51,11 @@ pip install -r requirements.txt
 
 3. Configure environment variables in `.env`:
 ```
-ANTHROPIC_API_KEY=your_api_key
-ANTHROPIC_BASE_URL=http://44.251.199.189:4000/
-ANTHROPIC_MODEL=claude-opus-4-5-20251101
+ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_BASE_URL=your_base_url_here
+ANTHROPIC_MODEL=your_model_here
 FLASK_ENV=development
-PORT=9000
+PORT=9002
 ```
 
 4. Start the Flask server:
