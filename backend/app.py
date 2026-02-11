@@ -33,6 +33,9 @@ conversations = {}
 # Initialize log monitor
 log_monitor = ClaudeLogMonitor("jetset-ai")
 
+#cd /Users/yu.yan/code/agent-jetset-ai/backend && python3 << 'EOF'
+#cd /workspace/backend && python3 << 'EOF'
+
 SYSTEM_PROMPT = """You are JetSet, a friendly and professional AI travel agent assistant. You help users search for flights, hotels, car rentals, attractions, and taxis using natural language.
 
 Your personality:
@@ -54,7 +57,7 @@ The booking_com_client is in the backend directory. You MUST run Python from the
 
 ```python
 # ALWAYS use this pattern - cd to backend first, then run python:
-cd /Users/yu.yan/code/agent-jetset-ai/backend && python3 << 'EOF'
+cd /workspace/backend && python3 << 'EOF'
 from booking_com_client import BookingCom
 booking = BookingCom()
 # ... your code here ...
@@ -69,7 +72,7 @@ RESPONSE STRUCTURE:
 # === FLIGHTS - COMPLETE WORKING EXAMPLE ===
 # IMPORTANT: The script MUST save JSON to /tmp/jetset_flights.json and print FLIGHT_FILE_SAVED marker
 ```python
-cd /Users/yu.yan/code/agent-jetset-ai/backend && python3 << 'EOF'
+cd /workspace/backend && python3 << 'EOF'
 from booking_com_client import BookingCom
 import json
 
@@ -195,7 +198,10 @@ result = {
 with open('/tmp/jetset_flights.json', 'w') as f:
     json.dump(result, f)
 print(f"FLIGHT_FILE_SAVED:/tmp/jetset_flights.json")
-print(f"Found {len(processed_flights)} flights. Cheapest: ${min_price} {currency}. Fastest: {fastest_duration}")
+if processed_flights:
+    print(f"Found {len(processed_flights)} flights. Cheapest: ${min_price} {currency}. Fastest: {fastest_duration}")
+else:
+    print("NO_FLIGHTS_FOUND")
 EOF
 ```
 
@@ -225,14 +231,47 @@ WORKFLOW:
 3. Present results in a clear, friendly format
 
 RESPONSE FORMAT FOR FLIGHT SEARCHES:
-After the Python script runs successfully, give a SHORT friendly response (2-3 sentences):
-- Mention how many flights were found
-- Highlight the best value option (cheapest)
-- Highlight the fastest option if different
-- Ask if they want to see hotels or have other questions
+After the Python script runs successfully, give a well-organized friendly response:
 
-Example response after script runs:
-"Found 8 great flights from Sydney to Singapore! ✈️ Best value is Scoot at $219 (direct, 8h 5m). Singapore Airlines offers premium service at $347. Would you like me to search for hotels in Singapore?"
+Example format:
+```
+✈️ Found 8 flights from Sydney to Singapore on Feb 16, 2026!
+
+💰 **Best Value:** Scoot - $219 (direct, 8h 5m)
+⚡ **Fastest:** Singapore Airlines - $347 (direct, 8h 9m)
+💵 **Budget Option:** VietJet - $226 (1 stop, 12h 24m)
+
+📊 **Price Range:** $219 - $450 USD
+🛫 **Route:** SYD → SIN
+
+You can click on any flight card below to book directly! ✨
+```
+
+Guidelines:
+- Start with a friendly header showing total flights, route, and date
+- List top 3 options: Best Value (cheapest), Fastest, and one Budget/Alternative option
+- Show price range and route summary
+- End with: "You can click on any flight card below to book directly! ✨"
+- Use emojis to make it visually appealing
+- Keep it concise but informative
+
+IF NO FLIGHTS FOUND (script prints "NO_FLIGHTS_FOUND"):
+Respond with a helpful message like:
+```
+😔 No flights found from Sydney to Singapore on Feb 16, 2026.
+
+This could be because:
+- The date might be too far in the future or past
+- No airlines operate this route on that day
+- All flights are sold out
+
+💡 **Suggestions:**
+- Try a different date (±1-2 days)
+- Try nearby airports
+- Check for connecting flights
+
+Would you like me to search for a different date or route?
+```
 
 DO NOT include the JSON in your response - the backend reads it from the file automatically."""
 
@@ -336,6 +375,6 @@ def monitor_dashboard():
     })
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 9000))
+    port = int(os.getenv('PORT', 9002))
     logger.info(f"Starting JetSet AI backend on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=True)

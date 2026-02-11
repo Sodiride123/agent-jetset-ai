@@ -87,22 +87,33 @@ The backend will run on `http://localhost:9002`
 
 ### Deployment Configuration
 
-**Important:** The `claude_wrapper.py` file contains a `cwd` setting that differs between environments:
+**Important:** When switching between local development and sandbox deployment, you need to update **2 files**:
 
-| Environment | Setting | Location |
-|-------------|---------|----------|
-| **Company AI Sandbox** | `cwd='/workspace'` | For deployment in company sandbox |
-| **Local Development** | `cwd=project_root` | For local development |
+#### 1. `backend/claude_wrapper.py` (Line ~44)
 
-To switch between environments, modify the `cwd` parameter in `backend/claude_wrapper.py`:
+| Environment | Setting |
+|-------------|---------|
+| **Local Development** | `cwd=project_root` |
+| **Company AI Sandbox** | `cwd='/workspace'` |
 
 ```python
 # For local development:
-cwd=project_root  # Uses os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+cwd=project_root
+#cwd='/workspace'
 
 # For company AI sandbox deployment:
+#cwd=project_root
 cwd='/workspace'
 ```
+
+#### 2. `backend/app.py` - System Prompt Paths (2 places, Lines ~57 and ~72)
+
+| Environment | Path |
+|-------------|------|
+| **Local Development** | `cd /Users/yu.yan/code/agent-jetset-ai/backend && python3` |
+| **Company AI Sandbox** | `cd /workspace/backend && python3` |
+
+Search for `cd /Users/yu.yan/code/agent-jetset-ai/backend` and replace with `cd /workspace/backend` (or vice versa).
 
 ### MCP Configuration (for Local Development)
 
@@ -145,7 +156,7 @@ npm install
 npm run dev
 ```
 
-The frontend will run on `http://localhost:3000`
+The frontend will run on `http://localhost:3002`
 
 ## 🌐 Live Demo
 

@@ -43,3 +43,4 @@ coverage/
 # Production
 /frontend/dist
 /frontend/build
+/backend/chat_logs

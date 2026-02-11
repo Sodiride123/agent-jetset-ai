@@ -51,17 +51,19 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
       tabIndex={flight.token ? 0 : undefined}
       onKeyDown={(e) => { if (flight.token && (e.key === 'Enter' || e.key === ' ')) handleClick(); }}
     >
-      {/* Best value badge */}
-      {isCheapest && (
-        <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
-          💰 Cheapest
-        </div>
-      )}
-      {isFastest && (
-        <div className="absolute top-3 right-3 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-bold">
-          ⚡ Fastest
-        </div>
-      )}
+      {/* Best value badges - positioned in top right, stacked if both */}
+      <div className="absolute top-3 right-3 flex flex-col gap-1">
+        {isCheapest && (
+          <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+            💰 Cheapest
+          </div>
+        )}
+        {isFastest && !isCheapest && (
+          <div className="bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+            ⚡ Fastest
+          </div>
+        )}
+      </div>
 
       {/* Header with Airline */}
       <div className="flex items-center justify-between mb-6">
@@ -76,7 +78,7 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
             )}
           </div>
         </div>
-        <div className="text-right">
+        <div className={`text-right ${(isCheapest || isFastest) ? 'mt-6' : ''}`}>
           <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
             ${flight.price}
           </div>
@@ -108,7 +110,7 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
             
             {/* Stops indicator */}
             {flight.stops > 0 && (
-              <div className="absolute left-1/2 transform -translate-x-1/2 top-6">
+              <div className="absolute left-1/2 transform -translate-x-1/2 top-8">
                 <div className="text-xs text-orange-600 font-medium whitespace-nowrap">
                   {flight.stops} stop{flight.stops > 1 ? 's' : ''}
                   {flight.layovers && flight.layovers.length > 0 && (
@@ -117,11 +119,6 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
                 </div>
               </div>
             )}
-            
-            {/* Plane icon */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 text-purple-500 text-xl">
-              ✈
-            </div>
           </div>
         </div>
         

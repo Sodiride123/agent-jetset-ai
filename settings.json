@@ -1,8 +1,8 @@
 {
     "env": {
-        "ANTHROPIC_AUTH_TOKEN": "your_api_key_here",
-        "ANTHROPIC_BASE_URL": "your_base_url_here",
-        "ANTHROPIC_MODEL": "your_model_here"
+        "ANTHROPIC_AUTH_TOKEN": "PLACEHOLDER_API_KEY",
+        "ANTHROPIC_BASE_URL": "PLACEHOLDER_BASE_URL",
+        "ANTHROPIC_MODEL": "PLACEHOLDER_MODEL"
     },
     "permissions": {
         "allow": [
