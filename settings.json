@@ -2,7 +2,7 @@
     "env": {
         "ANTHROPIC_AUTH_TOKEN": "PLACEHOLDER_API_KEY",
         "ANTHROPIC_BASE_URL": "PLACEHOLDER_BASE_URL",
-        "ANTHROPIC_MODEL": "PLACEHOLDER_MODEL"
+        "ANTHROPIC_MODEL": "claude-sonnet-4-5-20250929"
     },
     "permissions": {
         "allow": [

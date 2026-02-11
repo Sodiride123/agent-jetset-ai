@@ -42,7 +42,7 @@ def call_claude_with_mcp(message, conversation_history=None, system_prompt=None)
             text=True,
             timeout=300,  # 5 minutes timeout for flight searches
             #cwd=project_root
-            cwd='/workspace'  # For local dev. Use cwd='/workspace' for company AI agent sandbox
+            cwd='/workspace'  # Use cwd='/workspace' for company AI agent sandbox
         )
         
         if result.returncode == 0:

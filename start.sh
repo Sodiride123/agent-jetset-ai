@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Starting JetSet AI Application..."
+echo "🚀 Starting JetSet AI Application (Production Mode)..."
 echo ""
 
 # Extract credentials from Claude settings
@@ -11,7 +11,7 @@ if [ -f "$CLAUDE_SETTINGS" ]; then
     # Extract API key and base URL using jq
     ANTHROPIC_API_KEY=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN' "$CLAUDE_SETTINGS")
     ANTHROPIC_BASE_URL=$(jq -r '.env.ANTHROPIC_BASE_URL' "$CLAUDE_SETTINGS")
-    ANTHROPIC_MODEL=$(jq -r '.env.ANTHROPIC_MODEL' "$CLAUDE_SETTINGS")
+    ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 
     # Update backend/.env file
     echo "📝 Updating backend/.env with credentials..."
@@ -50,6 +50,15 @@ fi
 
 echo ""
 
+# Build frontend for production
+echo "🔨 Building frontend for production..."
+cd frontend
+npm run build
+cd ..
+echo "✅ Frontend build complete"
+
+echo ""
+
 # Start backend
 echo "📦 Starting Flask backend on port 9002..."
 cd backend
@@ -61,18 +70,16 @@ cd ..
 # Wait for backend to start
 sleep 3
 
-# Start frontend
-echo "🎨 Starting React frontend on port 3002..."
-cd frontend
-npm run dev &
+# Start Express server (serves production build + proxies API)
+echo "🌐 Starting Express server on port 3004..."
+node server.js &
 FRONTEND_PID=$!
-cd ..
 
 echo ""
-echo "✅ JetSet AI is now running!"
+echo "✅ JetSet AI is now running (Production Mode)!"
 echo ""
-echo "📍 Frontend: http://localhost:3002"
-echo "📍 Backend:  http://localhost:9002"
+echo "📍 App URL:  http://localhost:3004  ← Expose this port to CloudFront"
+echo "📍 Backend:  http://localhost:9002  (internal)"
 echo ""
 echo "Press Ctrl+C to stop all services"
 echo ""

@@ -4,7 +4,7 @@ const path = require('path');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 9000;
+const PORT = process.env.PORT || 3004;
 const BACKEND_URL = 'http://localhost:9002';
 
 // Middleware

@@ -142,6 +142,14 @@ for i, offer in enumerate(flight_offers[:8]):
 
     stops = len(legs) - 1
 
+    # Extract layover cities from intermediate legs
+    layover_cities = []
+    if stops > 0:
+        for leg in legs[:-1]:  # All legs except the last one
+            arr_city = leg.get('arrivalAirport', {}).get('cityName', '')
+            if arr_city:
+                layover_cities.append(arr_city)
+
     flight = {
         "id": str(i + 1),
         "airline": airline,
@@ -162,7 +170,7 @@ for i, offer in enumerate(flight_offers[:8]):
         },
         "duration": duration,
         "stops": stops,
-        "layovers": [],
+        "layovers": layover_cities,
         "class": "Economy",
         "tags": [],
         "token": token

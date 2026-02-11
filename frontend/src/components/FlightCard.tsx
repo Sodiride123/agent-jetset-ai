@@ -114,7 +114,9 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
                 <div className="text-xs text-orange-600 font-medium whitespace-nowrap">
                   {flight.stops} stop{flight.stops > 1 ? 's' : ''}
                   {flight.layovers && flight.layovers.length > 0 && (
-                    <span className="text-gray-500"> via {flight.layovers.join(', ')}</span>
+                    <span className="text-gray-500"> via {flight.layovers.map(l =>
+                      typeof l === 'string' ? l : (l as any)?.city || (l as any)?.name || ''
+                    ).filter(Boolean).join(', ')}</span>
                   )}
                 </div>
               </div>
