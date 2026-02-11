@@ -44,12 +44,18 @@ A modern, full-stack web application that allows users to search for flights thr
 cd jetset-ai/backend
 ```
 
-2. Install Python dependencies:
+2. Create and activate a virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+3. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure environment variables in `.env`:
+4. Configure environment variables in `.env`:
 ```
 ANTHROPIC_API_KEY=your_api_key_here
 ANTHROPIC_BASE_URL=your_base_url_here
@@ -58,12 +64,69 @@ FLASK_ENV=development
 PORT=9002
 ```
 
-4. Start the Flask server:
+5. Configure `settings.json` in the project root:
+```json
+{
+    "env": {
+        "ANTHROPIC_AUTH_TOKEN": "your_api_key_here",
+        "ANTHROPIC_BASE_URL": "your_base_url_here",
+        "ANTHROPIC_MODEL": "your_model_here"
+    },
+    "permissions": {
+        "allow": ["Edit(**)", "Bash", "mcp__booking"]
+    }
+}
+```
+
+6. Start the Flask server:
 ```bash
 python app.py
 ```
 
-The backend will run on `http://localhost:9000`
+The backend will run on `http://localhost:9002`
+
+### Deployment Configuration
+
+**Important:** The `claude_wrapper.py` file contains a `cwd` setting that differs between environments:
+
+| Environment | Setting | Location |
+|-------------|---------|----------|
+| **Company AI Sandbox** | `cwd='/workspace'` | For deployment in company sandbox |
+| **Local Development** | `cwd=project_root` | For local development |
+
+To switch between environments, modify the `cwd` parameter in `backend/claude_wrapper.py`:
+
+```python
+# For local development:
+cwd=project_root  # Uses os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
+# For company AI sandbox deployment:
+cwd='/workspace'
+```
+
+### MCP Configuration (for Local Development)
+
+To use real flight data locally, you need to configure the booking.com MCP in your LiteLLM instance:
+
+1. Access LiteLLM UI at `http://localhost:4000/ui`
+2. Add a new MCP server with the following settings:
+
+| Field | Value |
+|-------|-------|
+| Server Name | `booking_com_mcp` |
+| Alias | `flights` |
+| Server URL | `https://mcp.rapidapi.com` |
+| Transport | `http` |
+| Auth Type | `none` |
+
+3. Add Static Headers:
+   - `x-api-key`: Your RapidAPI key (get from https://rapidapi.com/tipsters/api/booking-com15)
+   - `x-api-host`: `booking-com15.p.rapidapi.com`
+
+4. Verify MCP is working:
+```bash
+curl -s -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:4000/v1/mcp/server"
+```
 
 ### Frontend Setup
 
@@ -119,6 +182,43 @@ The frontend will run on `http://localhost:3000`
   - Uses Claude AI via LiteLLM proxy
   - Integrates with booking.com MCP for flight data
   - Maintains conversation context for natural dialogue
+
+### Request Workflow
+
+When a user searches for flights, the following sequence occurs:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Flight Search Workflow                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. [Sonnet 4.5] Initial warmup/loading                                      │
+│         ↓                                                                    │
+│  2. [Sonnet 4.5] Process user request, generate Python script                │
+│         ↓                                                                    │
+│  3. [Python Script] Execute booking.com API calls:                           │
+│         ├── Search destination #1 (e.g., "Sydney" → SYD.AIRPORT)             │
+│         ├── Search destination #2 (e.g., "Singapore" → SIN.CITY)             │
+│         └── Search flights between destinations                              │
+│         ↓                                                                    │
+│  4. [Haiku 4.5] Internal processing (Claude Code CLI optimization)           │
+│         ↓                                                                    │
+│  5. [Sonnet 4.5] Generate final response with structured JSON                │
+│         ↓                                                                    │
+│  6. [Backend] Extract JSON from response, return to frontend                 │
+│         ↓                                                                    │
+│  7. [Frontend] Render flight cards with booking links                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Token Usage Example:**
+| Step | Model | Tokens | Description |
+|------|-------|--------|-------------|
+| 1-2 | Sonnet 4.5 | ~18,000 | Initial request processing |
+| 3 | python-requests | 0 | Booking.com API calls (3 requests) |
+| 4 | Haiku 4.5 | ~7,000 | Internal optimization |
+| 5 | Sonnet 4.5 | ~30,000 | Final response generation |
 
 ### Frontend (React + TypeScript)
 - **Components**:

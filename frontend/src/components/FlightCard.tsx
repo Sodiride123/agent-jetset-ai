@@ -21,6 +21,7 @@ interface Flight {
   layovers?: string[];
   class?: string;
   tags?: string[];
+  token?: string;
 }
 
 interface FlightCardProps {
@@ -32,8 +33,24 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
   const isFastest = flight.tags?.includes('fastest');
   const isDirect = flight.stops === 0;
 
+  const handleClick = () => {
+    if (flight.token) {
+      // Construct booking URL: https://flights.booking.com/flights/{DEP}.CITY-{ARR}.CITY/{TOKEN}
+      const depCode = flight.departure.airport.toUpperCase();
+      const arrCode = flight.arrival.airport.toUpperCase();
+      const bookingUrl = `https://flights.booking.com/flights/${depCode}.CITY-${arrCode}.CITY/${flight.token}`;
+      window.open(bookingUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
-    <div className="flight-card bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+    <div
+      className={`flight-card bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden ${flight.token ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
+      onClick={handleClick}
+      role={flight.token ? 'button' : undefined}
+      tabIndex={flight.token ? 0 : undefined}
+      onKeyDown={(e) => { if (flight.token && (e.key === 'Enter' || e.key === ' ')) handleClick(); }}
+    >
       {/* Best value badge */}
       {isCheapest && (
         <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
@@ -136,6 +153,11 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
         {flight.stops > 1 && (
           <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
             {flight.stops} Stops
+          </span>
+        )}
+        {flight.token && (
+          <span className="ml-auto px-4 py-1 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-full text-xs font-bold">
+            Book Now →
           </span>
         )}
       </div>

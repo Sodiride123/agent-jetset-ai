@@ -29,6 +29,7 @@ export interface Flight {
   layovers?: string[];
   class?: string;
   tags?: string[];
+  token?: string;
 }
 
 export interface FlightData {

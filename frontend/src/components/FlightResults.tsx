@@ -23,6 +23,7 @@ interface Flight {
   layovers?: string[];
   class?: string;
   tags?: string[];
+  token?: string;
 }
 
 interface FlightData {

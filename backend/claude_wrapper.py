@@ -33,13 +33,15 @@ def call_claude_with_mcp(message, conversation_history=None, system_prompt=None)
         logger.info(f"Running Claude CLI: {' '.join(cmd[:5])}...")
         
         # Call Claude Code CLI using stdin for non-interactive execution
+        # Use the project root directory as working directory
+        project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
         result = subprocess.run(
             cmd,
             input=full_prompt,
             capture_output=True,
             text=True,
-            timeout=120,
-            cwd='/workspace'
+            timeout=300,  # 5 minutes timeout for flight searches
+            cwd=project_root  # For local dev. Use cwd='/workspace' for company AI agent sandbox
         )
         
         if result.returncode == 0:
@@ -73,19 +75,87 @@ def call_claude_with_mcp(message, conversation_history=None, system_prompt=None)
 
 def reformat_to_structured_json(raw_response, original_query):
     """
-    Use Claude API to reformat the raw response into structured JSON
+    Extract structured JSON from the response. First checks for file-based output,
+    then tries direct extraction from code blocks, then falls back to API call if needed.
     """
     try:
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        base_url = os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
-        model = os.getenv('ANTHROPIC_MODEL', 'claude-3-opus-20240229')
-        
+        # PRIORITY 1: Check for file-based JSON (new fast approach)
+        file_match = re.search(r'FLIGHT_FILE_SAVED:(/[^\s\n]+\.json)', raw_response)
+        if file_match:
+            file_path = file_match.group(1)
+            logger.info(f"Found flight file marker, reading from: {file_path}")
+            try:
+                with open(file_path, 'r') as f:
+                    flight_data = json.load(f)
+                if 'flights' in flight_data and isinstance(flight_data['flights'], list):
+                    logger.info(f"Successfully loaded {len(flight_data.get('flights', []))} flights from file")
+                    return flight_data
+            except (IOError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to read flight file {file_path}: {e}")
+
+        # Also check the default file location even without marker
+        default_file = '/tmp/jetset_flights.json'
+        if os.path.exists(default_file):
+            try:
+                # Check if file was modified recently (within last 5 minutes)
+                import time
+                file_mtime = os.path.getmtime(default_file)
+                if time.time() - file_mtime < 300:  # 5 minutes
+                    with open(default_file, 'r') as f:
+                        flight_data = json.load(f)
+                    if 'flights' in flight_data and isinstance(flight_data['flights'], list):
+                        logger.info(f"Loaded {len(flight_data.get('flights', []))} flights from default file")
+                        return flight_data
+            except (IOError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to read default flight file: {e}")
+
+        # PRIORITY 2: Try multiple extraction patterns in order of preference
+        extraction_patterns = [
+            (r'FLIGHT_JSON_START\s*(\{.*\})\s*FLIGHT_JSON_END', "FLIGHT_JSON markers"),
+            (r'```json\s*(\{.*\})\s*```', "```json blocks"),
+            (r'JSON OUTPUT:\s*(\{.*\})', "JSON OUTPUT prefix"),
+            (r'FLIGHT SEARCH RESULTS JSON[:\s=]*(\{.*\})', "FLIGHT SEARCH RESULTS"),
+            (r'"flights"\s*:\s*\[.*?\]\s*,\s*"summary"', "flights+summary structure"),
+        ]
+
+        for pattern, pattern_name in extraction_patterns[:-1]:  # Skip last pattern (it's a detection pattern)
+            match = re.search(pattern, raw_response, re.DOTALL)
+            if match:
+                try:
+                    json_text = match.group(1)
+                    flight_data = json.loads(json_text)
+                    if 'flights' in flight_data and isinstance(flight_data['flights'], list):
+                        logger.info(f"Extracted {len(flight_data.get('flights', []))} flights using {pattern_name}")
+                        return flight_data
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse JSON from {pattern_name}: {e}")
+                    continue
+
+        # Last resort: find any JSON object with "flights" key
+        json_block_match = re.search(r'(\{"flights"\s*:\s*\[.*\]\s*,\s*"summary"\s*:\s*\{[^}]+\}\s*\})', raw_response, re.DOTALL)
+        if json_block_match:
+            try:
+                json_text = json_block_match.group(1)
+                flight_data = json.loads(json_text)
+                # Validate it has the expected structure
+                if 'flights' in flight_data and isinstance(flight_data['flights'], list):
+                    logger.info(f"Directly extracted {len(flight_data.get('flights', []))} flights from response")
+                    return flight_data
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse JSON block directly: {e}")
+
         # Check if response contains flight data (tables, prices, etc.)
         has_flight_data = bool(re.search(r'\$\d+|£\d+|€\d+|\d+h\s*\d+m|flight|airline', raw_response, re.IGNORECASE))
-        
+
         if not has_flight_data:
             logger.info("No flight data detected in response, skipping JSON formatting")
             return None
+
+        # Fall back to API call only if direct extraction failed
+        logger.info("Direct JSON extraction failed, falling back to API call...")
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        base_url = os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
+        model = os.getenv('ANTHROPIC_MODEL', 'claude-3-opus-20240229')
         
         system_prompt = """You are a data extraction assistant. Your job is to extract flight information from text and convert it into structured JSON format.
 
@@ -115,7 +185,8 @@ Given flight information in any format (tables, lists, paragraphs), extract and 
       "stops": 0,
       "layovers": [],
       "class": "Economy",
-      "tags": []
+      "tags": [],
+      "token": "d6a1f_H4sIAAAAAAAA_..."
     }
   ],
   "summary": {
@@ -134,7 +205,8 @@ Rules:
 - Add "fastest" tag to the shortest duration flight
 - If date is not specified, use tomorrow's date
 - If flight number is not available, omit the field
-- Extract all flights mentioned in the text"""
+- Extract all flights mentioned in the text
+- CRITICAL: EVERY flight in the response has a unique "token" field. You MUST extract and include the token for EACH flight, not just the first one. The token is a long string (often starting with characters like "d6a1f_" or similar). Extract ALL tokens from ALL flights."""
 
         user_prompt = f"""Extract flight data from this response and return as JSON:
 
@@ -164,10 +236,10 @@ Return ONLY the JSON object, nothing else."""
         logger.info("Calling Claude API to reformat response into JSON...")
         
         response = requests.post(
-            f'{base_url}v1/messages',
+            f'{base_url.rstrip("/")}/v1/messages',
             headers=headers,
             json=payload,
-            timeout=30
+            timeout=120
         )
         
         if response.status_code != 200:
