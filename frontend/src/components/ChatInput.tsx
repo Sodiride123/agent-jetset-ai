@@ -30,7 +30,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled = false }
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyPress={handleKeyPress}
-        placeholder="Ask me about flights... e.g., 'Find flights from NYC to London next Friday'"
+        placeholder="Ask me about flights... e.g., 'Find flights from Sydney to London next Friday'"
         className="flex-1 px-4 py-2 rounded-full focus:outline-none text-gray-700"
         disabled={disabled}
       />

@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNewChat }) => {
         </h3>
         <div className="space-y-2 text-xs text-gray-600">
           <p className="bg-gray-50 p-2 rounded-lg">
-            "Find flights from NYC to London next Friday"
+            "Find flights from Sydney to London next Friday"
           </p>
           <p className="bg-gray-50 p-2 rounded-lg">
             "Show me weekend trips to Paris under $500"

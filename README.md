@@ -175,7 +175,7 @@ The frontend will run on `http://localhost:3002`
 
 ## 🎯 Example Queries
 
-- "Find flights from NYC to London next Friday"
+- "Find flights from Sydney to London next Friday"
 - "Show me weekend trips to Paris under $500"
 - "Direct flights to Tokyo in March"
 - "Cheapest flights to Miami next month"
