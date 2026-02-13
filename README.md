@@ -239,19 +239,6 @@ When a user searches for flights, the following sequence occurs:
   - `LoadingIndicator.tsx` - Loading animation
   - `Sidebar.tsx` - Navigation and features panel
 
-- **Styling**:
-  - Tailwind CSS with custom configuration
-  - Gradient backgrounds (purple-to-blue, teal-to-cyan)
-  - Smooth animations and transitions
-  - Responsive design
-
-## 🎨 Design Philosophy
-
-- **Clean & Modern**: Spacious layout with plenty of white space
-- **Professional Yet Friendly**: Warm colors and approachable mascot
-- **User-Centric**: Intuitive chat interface with clear visual hierarchy
-- **Accessible**: High contrast, readable fonts, and clear CTAs
-
 ## 🔧 Technology Stack
 
 - **Frontend**:
@@ -314,26 +301,3 @@ Reset the conversation history.
 }
 ```
 
-## 🤝 Contributing
-
-This is a demonstration project showcasing AI-powered travel search capabilities.
-
-## 📄 License
-
-This project is created for demonstration purposes.
-
-## 🙏 Acknowledgments
-
-- Claude AI by Anthropic
-- booking.com for flight data
-- NinjaTech AI for the platform
-- React and Vite communities
-- Tailwind CSS team
-
-## 📞 Support
-
-For questions or issues, please refer to the documentation or contact support.
-
----
-
-Built with ❤️ using Claude AI and modern web technologies
