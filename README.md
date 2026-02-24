@@ -26,7 +26,7 @@ A modern, full-stack web application that allows users to search for flights thr
 - **AI Engine**: Claude Code CLI with LiteLLM gateway
 - **MCP Integration**: booking.com for real-time flight data
 - **Monitoring**: Claude Monitor dashboard on port 9010
-- **AI**: Claude AI (Opus 4.5) via LiteLLM proxy
+- **AI**: Claude AI (Opus 4.6 / Sonnet 4.6) via LiteLLM proxy
 - **Data**: booking.com MCP for real-time flight data
 
 ## 🚀 Getting Started
@@ -203,18 +203,18 @@ When a user searches for flights, the following sequence occurs:
 │                           Flight Search Workflow                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  1. [Sonnet 4.5] Initial warmup/loading                                      │
+│  1. [Sonnet 4.6] Initial warmup/loading                                      │
 │         ↓                                                                    │
-│  2. [Sonnet 4.5] Process user request, generate Python script                │
+│  2. [Sonnet 4.6] Process user request, generate Python script                │
 │         ↓                                                                    │
 │  3. [Python Script] Execute booking.com API calls:                           │
 │         ├── Search destination #1 (e.g., "Sydney" → SYD.AIRPORT)             │
 │         ├── Search destination #2 (e.g., "Singapore" → SIN.CITY)             │
 │         └── Search flights between destinations                              │
 │         ↓                                                                    │
-│  4. [Haiku 4.5] Internal processing (Claude Code CLI optimization)           │
+│  4. [Sonnet 4.6] Internal processing (Claude Code CLI optimization)          │
 │         ↓                                                                    │
-│  5. [Sonnet 4.5] Generate final response with structured JSON                │
+│  5. [Sonnet 4.6] Generate final response with structured JSON                │
 │         ↓                                                                    │
 │  6. [Backend] Extract JSON from response, return to frontend                 │
 │         ↓                                                                    │
@@ -226,10 +226,10 @@ When a user searches for flights, the following sequence occurs:
 **Token Usage Example:**
 | Step | Model | Tokens | Description |
 |------|-------|--------|-------------|
-| 1-2 | Sonnet 4.5 | ~18,000 | Initial request processing |
+| 1-2 | Sonnet 4.6 | ~18,000 | Initial request processing |
 | 3 | python-requests | 0 | Booking.com API calls (3 requests) |
-| 4 | Haiku 4.5 | ~7,000 | Internal optimization |
-| 5 | Sonnet 4.5 | ~30,000 | Final response generation |
+| 4 | Sonnet 4.6 | ~7,000 | Internal optimization |
+| 5 | Sonnet 4.6 | ~30,000 | Final response generation |
 
 ### Frontend (React + TypeScript)
 - **Components**:

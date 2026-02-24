@@ -11,7 +11,7 @@ if [ -f "$CLAUDE_SETTINGS" ]; then
     # Extract API key and base URL using jq
     ANTHROPIC_API_KEY=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN' "$CLAUDE_SETTINGS")
     ANTHROPIC_BASE_URL=$(jq -r '.env.ANTHROPIC_BASE_URL' "$CLAUDE_SETTINGS")
-    ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+    ANTHROPIC_MODEL=claude-sonnet-4-6
 
     # Update backend/.env file
     echo "📝 Updating backend/.env with credentials..."
