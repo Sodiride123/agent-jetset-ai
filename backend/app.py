@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import subprocess
 from dotenv import load_dotenv
 import requests
 import json
 import logging
+import re
 from datetime import datetime
 from claude_wrapper import call_claude_with_mcp, reformat_to_structured_json
 from log_monitor import ClaudeLogMonitor
@@ -25,7 +27,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # API Configuration
 API_KEY = os.getenv('ANTHROPIC_API_KEY')
 BASE_URL = os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
-MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-opus-20240229')
+MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-6')
 
 # Store conversation history (in production, use a database)
 conversations = {}
@@ -33,240 +35,195 @@ conversations = {}
 # Initialize log monitor
 log_monitor = ClaudeLogMonitor("jetset-ai")
 
-#cd /Users/yu.yan/code/agent-jetset-ai/backend && python3 << 'EOF'
-#cd /workspace/backend && python3 << 'EOF'
+# SYSTEM PROMPT FOR PARAMETER EXTRACTION
+# Claude only extracts search parameters - the fixed script handles the actual search
+SYSTEM_PROMPT = """You are JetSet, a friendly AI travel assistant. Your job is to understand user travel requests and extract search parameters.
 
-SYSTEM_PROMPT = """You are JetSet, a friendly and professional AI travel agent assistant. You help users search for flights, hotels, car rentals, attractions, and taxis using natural language.
+IMPORTANT: You have access to the CONVERSATION HISTORY. Use it to understand follow-up questions!
 
-Your personality:
-- Warm, friendly, and enthusiastic about travel
-- Professional and knowledgeable
-- Patient and helpful
-- Use emojis occasionally to add personality (✈️, 🌍, 💼, 🏨, 🚗, etc.)
+IMPORTANT: You MUST respond with a JSON object for travel-related requests. Do NOT run any Python code or scripts.
 
-IMPORTANT - HOW TO SEARCH FOR TRAVEL DATA:
-You MUST use the booking_com_client.py Python library to search for real travel data. Do NOT make up fake data. Always run Python code to get real results.
-
-CRITICAL RULES:
-1. Complete the ENTIRE flight search in ONE SINGLE Bash call - do NOT split into multiple calls
-2. Do NOT "inspect" data first then process - process ALL flights and output final JSON in one script
-3. After the script runs successfully, give a SHORT friendly summary (2-3 sentences) - do NOT repeat the JSON
-4. The Python script saves JSON to a file - the backend reads it directly
-
-The booking_com_client is in the backend directory. You MUST run Python from there:
-
-```python
-# ALWAYS use this pattern - cd to backend first, then run python:
-cd /workspace/backend && python3 << 'EOF'
-from booking_com_client import BookingCom
-booking = BookingCom()
-# ... your code here ...
-EOF
-```
-
-RESPONSE STRUCTURE:
-- search_destination() returns: {"status": true, "data": [list of locations]}
-- flights.search() returns: {"status": true, "data": {"flightOffers": [list of flights], ...}}
-  NOTE: For flights, data is a DICT not a list! Access flights via: response.get('data', {}).get('flightOffers', [])
-
-# === FLIGHTS - COMPLETE WORKING EXAMPLE ===
-# IMPORTANT: The script MUST save JSON to /tmp/jetset_flights.json and print FLIGHT_FILE_SAVED marker
-```python
-cd /workspace/backend && python3 << 'EOF'
-from booking_com_client import BookingCom
-import json
-
-booking = BookingCom()
-
-# Step 1: Search for airport/city IDs
-origin_response = booking.flights.search_destination("Sydney")
-origin_id = origin_response.get('data', [])[0]['id']
-
-dest_response = booking.flights.search_destination("Singapore")
-dest_id = dest_response.get('data', [])[0]['id']
-
-# Step 2: Search flights
-flights_response = booking.flights.search(
-    from_id=origin_id,
-    to_id=dest_id,
-    depart_date="2026-02-16",
-    adults=1,
-    cabin_class="ECONOMY"
-)
-
-data = flights_response.get('data', {})
-flight_offers = data.get('flightOffers', [])
-
-# Step 3: Process flights (max 8)
-processed_flights = []
-min_price = float('inf')
-fastest_duration = None
-fastest_seconds = float('inf')
-
-for i, offer in enumerate(flight_offers[:8]):
-    token = offer.get('token', '')
-    price_info = offer.get('priceBreakdown', {}).get('totalRounded', {})
-    price = price_info.get('units', 0)
-    currency = price_info.get('currencyCode', 'USD')
-
-    segments = offer.get('segments', [])
-    if not segments:
-        continue
-    segment = segments[0]
-    legs = segment.get('legs', [])
-    total_time_sec = segment.get('totalTime', 0)
-
-    if not legs:
-        continue
-    first_leg = legs[0]
-    last_leg = legs[-1]
-
-    # Format duration
-    hours = total_time_sec // 3600
-    minutes = (total_time_sec % 3600) // 60
-    duration = f"{hours}h {minutes}m"
-
-    # Departure info
-    dep_time_str = first_leg.get('departureTime', '')
-    dep_airport = first_leg.get('departureAirport', {})
-
-    # Arrival info
-    arr_time_str = last_leg.get('arrivalTime', '')
-    arr_airport = last_leg.get('arrivalAirport', {})
-
-    # Airline info
-    carriers = first_leg.get('carriersData', [])
-    airline = carriers[0].get('name', 'Unknown') if carriers else 'Unknown'
-    carrier_code = carriers[0].get('code', '') if carriers else ''
-    flight_number = first_leg.get('flightInfo', {}).get('flightNumber', '')
-
-    stops = len(legs) - 1
-
-    # Extract layover cities from intermediate legs
-    layover_cities = []
-    if stops > 0:
-        for leg in legs[:-1]:  # All legs except the last one
-            arr_city = leg.get('arrivalAirport', {}).get('cityName', '')
-            if arr_city:
-                layover_cities.append(arr_city)
-
-    flight = {
-        "id": str(i + 1),
-        "airline": airline,
-        "flightNumber": f"{carrier_code}{flight_number}" if carrier_code and flight_number else "",
-        "price": price,
-        "currency": currency,
-        "departure": {
-            "time": dep_time_str[11:16] if len(dep_time_str) > 16 else "",
-            "date": dep_time_str[:10] if len(dep_time_str) >= 10 else "",
-            "airport": dep_airport.get('code', ''),
-            "city": dep_airport.get('cityName', '')
-        },
-        "arrival": {
-            "time": arr_time_str[11:16] if len(arr_time_str) > 16 else "",
-            "date": arr_time_str[:10] if len(arr_time_str) >= 10 else "",
-            "airport": arr_airport.get('code', ''),
-            "city": arr_airport.get('cityName', '')
-        },
-        "duration": duration,
-        "stops": stops,
-        "layovers": layover_cities,
-        "class": "Economy",
-        "tags": [],
-        "token": token
-    }
-    processed_flights.append(flight)
-
-    # Track cheapest and fastest
-    if price < min_price:
-        min_price = price
-    if total_time_sec < fastest_seconds:
-        fastest_seconds = total_time_sec
-        fastest_duration = duration
-
-# Add tags
-for flight in processed_flights:
-    if flight['price'] == min_price:
-        flight['tags'].append('cheapest')
-    if flight['duration'] == fastest_duration:
-        flight['tags'].append('fastest')
-
-# Build result
-result = {
-    "flights": processed_flights,
-    "summary": {
-        "totalResults": len(processed_flights),
-        "cheapestPrice": min_price if min_price != float('inf') else 0,
-        "fastestDuration": fastest_duration or "N/A",
-        "averagePrice": round(sum(f['price'] for f in processed_flights) / len(processed_flights)) if processed_flights else 0
-    }
+For FLIGHT searches, respond with ONLY this JSON format:
+```json
+{
+    "type": "flight_search",
+    "origin": "city or airport name",
+    "destination": "city or airport name",
+    "date": "the departure date in any format",
+    "adults": 1,
+    "cabin_class": "ECONOMY",
+    "return_date": null
 }
-
-# CRITICAL: Save to file and print marker
-with open('/tmp/jetset_flights.json', 'w') as f:
-    json.dump(result, f)
-print(f"FLIGHT_FILE_SAVED:/tmp/jetset_flights.json")
-if processed_flights:
-    print(f"Found {len(processed_flights)} flights. Cheapest: ${min_price} {currency}. Fastest: {fastest_duration}")
-else:
-    print("NO_FLIGHTS_FOUND")
-EOF
 ```
 
-# === HOTELS ===
-hotel_dests_response = booking.hotels.search_destination("Paris")
-hotel_dests = hotel_dests_response.get('data', [])
-dest_id = hotel_dests[0].get('dest_id') if hotel_dests else None
-
-hotels_response = booking.hotels.search(dest_id=dest_id, checkin="2026-03-15", checkout="2026-03-18", adults=2, rooms=1)
-hotels = hotels_response.get('data', [])
-
-# === CAR RENTALS ===
-car_locs_response = booking.cars.search_location("San Francisco")
-car_locs = car_locs_response.get('data', [])
-
-# === ATTRACTIONS ===
-attr_locs_response = booking.attractions.search_location("Tokyo")
-attr_locs = attr_locs_response.get('data', [])
-
-# === TAXIS ===
-taxi_locs_response = booking.taxi.search_location("Dubai")
-taxi_locs = taxi_locs_response.get('data', [])
-
-WORKFLOW:
-1. Parse the user's travel request to extract: origin, destination, dates, passengers, preferences
-2. Use booking_com_client to search for real data (always search destinations first to get IDs)
-3. Present results in a clear, friendly format
-
-RESPONSE FORMAT FOR FLIGHT SEARCHES:
-After the Python script runs successfully, give a well-organized friendly response:
-
-Example format:
-```
-✈️ Found 8 flights from Sydney to Singapore on Feb 16, 2026!
-
-💰 **Best Value:** Scoot - $219 (direct, 8h 5m)
-⚡ **Fastest:** Singapore Airlines - $347 (direct, 8h 9m)
-💵 **Budget Option:** VietJet - $226 (1 stop, 12h 24m)
-
-📊 **Price Range:** $219 - $450 USD
-🛫 **Route:** SYD → SIN
-
-You can click on any flight card below to book directly! ✨
+For GENERAL CONVERSATION (greetings, questions, etc.), respond with:
+```json
+{
+    "type": "conversation",
+    "response": "Your friendly response here"
+}
 ```
 
-Guidelines:
-- Start with a friendly header showing total flights, route, and date
-- List top 3 options: Best Value (cheapest), Fastest, and one Budget/Alternative option
-- Show price range and route summary
-- End with: "You can click on any flight card below to book directly! ✨"
-- Use emojis to make it visually appealing
-- Keep it concise but informative
+RULES:
+1. Extract the origin and destination cities/airports from the user's message
+2. Extract the date - keep it as the user said it (e.g., "next friday", "March 15", "tomorrow")
+3. Default adults to 1 unless specified
+4. Default cabin_class to "ECONOMY" unless user mentions business/first class
+5. Set return_date only for round trips
+6. For greetings or non-search messages, use type "conversation"
 
-IF NO FLIGHTS FOUND (script prints "NO_FLIGHTS_FOUND"):
-Respond with a helpful message like:
+HANDLING FOLLOW-UP QUESTIONS:
+- If the user says something like "no, next Wednesday" or "change to Thursday", look at the PREVIOUS messages to find the origin and destination, then use the NEW date
+- If the user says "what about to Singapore instead", keep the same origin and date but change the destination
+- If the user provides a completely new search like "now check Beijing to Tokyo on March 5", treat it as a fresh search
+- ALWAYS try to understand the user's intent from context
+
+EXAMPLES:
+
+User: "Find me a flight from Beijing to Melbourne next Friday"
+```json
+{
+    "type": "flight_search",
+    "origin": "Beijing",
+    "destination": "Melbourne",
+    "date": "next friday",
+    "adults": 1,
+    "cabin_class": "ECONOMY",
+    "return_date": null
+}
 ```
-😔 No flights found from Sydney to Singapore on Feb 16, 2026.
+
+[Previous search was: Beijing to Melbourne next Friday]
+User: "no, next Wednesday"
+```json
+{
+    "type": "flight_search",
+    "origin": "Beijing",
+    "destination": "Melbourne",
+    "date": "next wednesday",
+    "adults": 1,
+    "cabin_class": "ECONOMY",
+    "return_date": null
+}
+```
+
+[Previous search was: Beijing to Melbourne]
+User: "what about Singapore instead"
+```json
+{
+    "type": "flight_search",
+    "origin": "Beijing",
+    "destination": "Singapore",
+    "date": "next friday",
+    "adults": 1,
+    "cabin_class": "ECONOMY",
+    "return_date": null
+}
+```
+
+User: "I need 2 business class tickets from NYC to London on March 15th"
+```json
+{
+    "type": "flight_search",
+    "origin": "New York",
+    "destination": "London",
+    "date": "March 15",
+    "adults": 2,
+    "cabin_class": "BUSINESS",
+    "return_date": null
+}
+```
+
+User: "Hello!"
+```json
+{
+    "type": "conversation",
+    "response": "Hello! ✈️ Welcome to JetSet! I'm here to help you find the best flights. Just tell me where you'd like to go and when, and I'll search for options!"
+}
+```
+
+User: "Thanks for your help!"
+```json
+{
+    "type": "conversation",
+    "response": "You're welcome! ✈️ Have a wonderful trip! Feel free to come back anytime you need help finding flights. Safe travels! 🌍"
+}
+```
+
+RESPOND WITH ONLY THE JSON OBJECT - NO OTHER TEXT."""
+
+
+def run_flight_search(params: dict) -> dict:
+    """Run the fixed flight_search.py script with extracted parameters."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flight_search.py')
+
+        cmd = [
+            'python3', script_path,
+            '--origin', params.get('origin', ''),
+            '--destination', params.get('destination', ''),
+            '--date', params.get('date', 'next week'),
+            '--adults', str(params.get('adults', 1)),
+            '--cabin_class', params.get('cabin_class', 'ECONOMY').upper()
+        ]
+
+        if params.get('return_date'):
+            cmd.extend(['--return_date', params['return_date']])
+
+        logger.info(f"Running flight search: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+
+        logger.info(f"Flight search stdout: {result.stdout}")
+        if result.stderr:
+            logger.warning(f"Flight search stderr: {result.stderr}")
+
+        # Read results from file
+        output_file = '/tmp/jetset_flights.json'
+        if os.path.exists(output_file):
+            with open(output_file, 'r') as f:
+                return json.load(f)
+
+        return {"error": "No results file found", "flights": [], "summary": {}}
+
+    except subprocess.TimeoutExpired:
+        logger.error("Flight search timeout")
+        return {"error": "Search timeout", "flights": [], "summary": {}}
+    except Exception as e:
+        logger.error(f"Flight search error: {str(e)}")
+        return {"error": str(e), "flights": [], "summary": {}}
+
+
+def generate_flight_response(flight_data: dict, params: dict) -> str:
+    """Generate a friendly response from flight search results."""
+    flights = flight_data.get('flights', [])
+    summary = flight_data.get('summary', {})
+    error = flight_data.get('error')
+
+    origin = summary.get('origin', params.get('origin', 'Origin'))
+    destination = summary.get('destination', params.get('destination', 'Destination'))
+    date = summary.get('date', params.get('date', ''))
+
+    if error:
+        return f"""😔 Sorry, I encountered an issue while searching for flights.
+
+**Error:** {error}
+
+💡 **Suggestions:**
+- Check if the city names are spelled correctly
+- Try using airport codes (e.g., "JFK" instead of "New York")
+- Make sure the date is valid
+
+Would you like to try a different search?"""
+
+    if not flights:
+        return f"""😔 No flights found from {origin} to {destination} on {date}.
 
 This could be because:
 - The date might be too far in the future or past
@@ -278,10 +235,65 @@ This could be because:
 - Try nearby airports
 - Check for connecting flights
 
-Would you like me to search for a different date or route?
-```
+Would you like me to search for a different date or route?"""
 
-DO NOT include the JSON in your response - the backend reads it from the file automatically."""
+    # Find cheapest and fastest flights
+    cheapest = min(flights, key=lambda f: f.get('price', float('inf')))
+    fastest = min(flights, key=lambda f: _duration_to_minutes(f.get('duration', '999h')))
+
+    # Find a budget alternative (different from cheapest)
+    budget = None
+    for f in flights:
+        if f['id'] != cheapest['id'] and f['id'] != fastest['id']:
+            budget = f
+            break
+
+    currency = flights[0].get('currency', 'USD')
+
+    response = f"""✈️ Found **{len(flights)} flights** from {origin} to {destination} on {date}!
+
+💰 **Best Value:** {cheapest['airline']} - ${cheapest['price']} {currency} ({_stops_text(cheapest['stops'])}, {cheapest['duration']})
+⚡ **Fastest:** {fastest['airline']} - ${fastest['price']} {currency} ({_stops_text(fastest['stops'])}, {fastest['duration']})"""
+
+    if budget:
+        response += f"""
+💵 **Alternative:** {budget['airline']} - ${budget['price']} {currency} ({_stops_text(budget['stops'])}, {budget['duration']})"""
+
+    price_range = f"${summary.get('cheapestPrice', cheapest['price'])} - ${max(f['price'] for f in flights)}"
+    dep_code = flights[0].get('departure', {}).get('airport', '')
+    arr_code = flights[0].get('arrival', {}).get('airport', '')
+
+    response += f"""
+
+📊 **Price Range:** {price_range} {currency}
+🛫 **Route:** {dep_code} → {arr_code}
+
+Click on any flight card below to book directly! ✨"""
+
+    return response
+
+
+def _duration_to_minutes(duration: str) -> int:
+    """Convert duration string like '12h 30m' to minutes."""
+    try:
+        match = re.match(r'(\d+)h\s*(\d+)?m?', duration)
+        if match:
+            hours = int(match.group(1))
+            minutes = int(match.group(2) or 0)
+            return hours * 60 + minutes
+    except:
+        pass
+    return 9999
+
+
+def _stops_text(stops: int) -> str:
+    """Convert stops count to text."""
+    if stops == 0:
+        return "direct"
+    elif stops == 1:
+        return "1 stop"
+    else:
+        return f"{stops} stops"
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -295,41 +307,102 @@ def chat():
         data = request.json
         user_message = data.get('message', '')
         conversation_id = data.get('conversation_id', 'default')
-        
+
         logger.info(f"Received message: {user_message[:100]}...")
-        
+
         # Initialize conversation history if needed
         if conversation_id not in conversations:
             conversations[conversation_id] = []
-        
+
         # Add user message to history
         conversations[conversation_id].append({
             "role": "user",
             "content": user_message
         })
-        
-        # Step 1: Call Claude Code CLI with MCP tools to get flight data
-        logger.info("Step 1: Calling Claude Code CLI with MCP tools...")
-        
+
+        # Step 1: Call Claude to extract parameters (fast, no script generation)
+        logger.info("Step 1: Extracting search parameters with Claude...")
+
         result = call_claude_with_mcp(user_message, conversations[conversation_id][:-1], system_prompt=SYSTEM_PROMPT)
-        
+
         if not result['success']:
             raise Exception(result['error'] or 'Failed to get response from Claude')
-        
-        assistant_message = result['response']
-        
-        # Step 2: Reformat the response into structured JSON
-        logger.info("Step 2: Reformatting response into structured JSON...")
-        flight_data = reformat_to_structured_json(assistant_message, user_message)
-        
+
+        raw_response = result['response']
+        logger.info(f"Claude response: {raw_response[:200]}...")
+
+        # Step 2: Parse the JSON parameters from Claude's response
+        logger.info("Step 2: Parsing parameters...")
+
+        params = None
+
+        # Try multiple patterns to extract JSON
+        # Pattern 1: JSON in markdown code block
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_response, re.DOTALL)
+        if json_match:
+            try:
+                params = json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # Pattern 2: Raw JSON with "type" key
+        if not params:
+            json_match = re.search(r'(\{[^{}]*"type"\s*:\s*"[^"]+"\s*[^{}]*\})', raw_response, re.DOTALL)
+            if json_match:
+                try:
+                    params = json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+        # Pattern 3: More flexible JSON extraction
+        if not params:
+            json_match = re.search(r'\{.*"type".*\}', raw_response, re.DOTALL)
+            if json_match:
+                try:
+                    # Clean up the JSON string
+                    json_str = json_match.group(0)
+                    # Fix common issues
+                    json_str = re.sub(r'[\x00-\x1f]', ' ', json_str)  # Remove control characters
+                    params = json.loads(json_str)
+                except json.JSONDecodeError:
+                    pass
+
+        # Fallback: treat as conversation
+        if not params:
+            logger.warning(f"Could not parse JSON from response, treating as conversation")
+            params = {"type": "conversation", "response": raw_response}
+
+        logger.info(f"Parsed params: {params}")
+
+        # Step 3: Handle based on request type
+        flight_data = None
+        assistant_message = ""
+
+        if params.get('type') == 'flight_search':
+            # Run the fixed flight search script
+            logger.info("Step 3: Running fixed flight search script...")
+            flight_data = run_flight_search(params)
+
+            # Generate friendly response from results
+            logger.info("Step 4: Generating response...")
+            assistant_message = generate_flight_response(flight_data, params)
+
+        elif params.get('type') == 'conversation':
+            # Just return the conversation response
+            assistant_message = params.get('response', "Hello! How can I help you find flights today?")
+
+        else:
+            # Unknown type, return raw response
+            assistant_message = raw_response
+
         # Add assistant response to history
         conversations[conversation_id].append({
             "role": "assistant",
             "content": assistant_message
         })
-        
+
         logger.info(f"Sending response: {assistant_message[:100]}...")
-        
+
         return jsonify({
             'response': assistant_message,
             'conversation_id': conversation_id,
@@ -337,7 +410,7 @@ def chat():
             'tool_uses': [],
             'needs_continuation': False
         })
-        
+
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         return jsonify({
