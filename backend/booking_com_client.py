@@ -69,6 +69,13 @@ class BookingConfig:
                              headers={"Authorization": f"Bearer {self.api_key}"})
             if r.status_code == 200:
                 servers = r.json()
+                # Priority 1: Look for server with alias "flights" (has full toolset)
+                for s in servers:
+                    if s.get("alias", "").lower() == "flights":
+                        self.server_id = s["server_id"]
+                        self.tool_prefix = "flights-"
+                        return
+                # Priority 2: Look for "booking" in server_name
                 for s in servers:
                     if "booking" in s.get("server_name", "").lower():
                         self.server_id = s["server_id"]
