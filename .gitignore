@@ -39,6 +39,10 @@ yarn-error.log*
 # Testing
 coverage/
 .pytest_cache/
+test_suite.py
+test_date_range.py
+test_mcp_compatibility.py
+test_conversations.sh
 
 # Production
 /frontend/dist

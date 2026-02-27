@@ -57,10 +57,16 @@ class BookingConfig:
             self.api_key = os.environ.get("BOOKING_MCP_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
             if not self.api_key:
                 raise ValueError("API key required via BOOKING_MCP_API_KEY or ANTHROPIC_API_KEY env var or BookingConfig(api_key=...)")
+
+        # Always run discovery to ensure tool_prefix is set correctly
+        # Even if server_id is in env, we need to discover the tool_prefix
+        env_server_id = os.environ.get("BOOKING_MCP_SERVER_ID", "")
         if not self.server_id:
-            self.server_id = os.environ.get("BOOKING_MCP_SERVER_ID", "")
-            if not self.server_id:
-                self._discover_server_id()
+            self.server_id = env_server_id
+
+        # Run discovery if we don't have tool_prefix or server_id
+        if not self.tool_prefix or not self.server_id:
+            self._discover_server_id()
 
     def _discover_server_id(self):
         """Auto-discover server_id and tool_prefix from the gateway"""
@@ -69,19 +75,43 @@ class BookingConfig:
                              headers={"Authorization": f"Bearer {self.api_key}"})
             if r.status_code == 200:
                 servers = r.json()
+
                 # Priority 1: Look for server with alias "flights" (has full toolset)
                 for s in servers:
-                    if s.get("alias", "").lower() == "flights":
+                    alias = s.get("alias", "").lower()
+                    if alias == "flights":
                         self.server_id = s["server_id"]
                         self.tool_prefix = "flights-"
+                        print(f"[MCP] Using server '{s.get('server_name')}' with alias 'flights'")
                         return
-                # Priority 2: Look for "booking" in server_name
+
+                # Priority 2: Look for "booking" in server_name (prefer one with most tools)
+                booking_servers = []
                 for s in servers:
-                    if "booking" in s.get("server_name", "").lower():
+                    server_name = s.get("server_name", "").lower()
+                    if "booking" in server_name:
+                        booking_servers.append(s)
+
+                if booking_servers:
+                    # Use the first booking server found
+                    s = booking_servers[0]
+                    self.server_id = s["server_id"]
+                    alias = s.get("alias", "")
+                    self.tool_prefix = f"{alias}-" if alias else ""
+                    print(f"[MCP] Using server '{s.get('server_name')}' with prefix '{self.tool_prefix}'")
+                    return
+
+                # Priority 3: Look for any server with flight-related tools
+                for s in servers:
+                    server_name = s.get("server_name", "").lower()
+                    if "flight" in server_name or "travel" in server_name:
                         self.server_id = s["server_id"]
-                        self.tool_prefix = s.get("alias", "") + "-" if s.get("alias") else ""
+                        alias = s.get("alias", "")
+                        self.tool_prefix = f"{alias}-" if alias else ""
+                        print(f"[MCP] Using server '{server_name}' with prefix '{self.tool_prefix}'")
                         return
-            raise ValueError("Could not auto-discover server_id")
+
+            raise ValueError("Could not auto-discover server_id - no booking/flight servers found")
         except requests.RequestException as e:
             raise ValueError(f"Failed to connect to {self.base_url}: {e}")
         except ValueError:
@@ -101,15 +131,41 @@ class _MCPSession:
         }
 
     def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
-        # Prefix tool name with server alias (e.g. "flights-")
-        prefixed_name = f"{self.cfg.tool_prefix}{name}"
-        r = requests.post(f"{self.cfg.base_url}/mcp-rest/tools/call",
-                          headers=self._headers,
-                          json={"name": prefixed_name, "arguments": arguments,
-                                "server_id": self.cfg.server_id})
+        # Try multiple tool name patterns for cross-environment compatibility
+        tool_patterns = [
+            f"{self.cfg.tool_prefix}{name}",  # Primary: e.g., "flights-Search_Flight_Location"
+            name,                              # Fallback 1: No prefix
+            f"booking_com-{name}",             # Fallback 2: "booking_com-" prefix (some sandboxes)
+        ]
+
+        last_error = None
+        for prefixed_name in tool_patterns:
+            r = requests.post(f"{self.cfg.base_url}/mcp-rest/tools/call",
+                              headers=self._headers,
+                              json={"name": prefixed_name, "arguments": arguments,
+                                    "server_id": self.cfg.server_id})
+
+            if r.status_code == 200:
+                # Success! Cache this prefix for future calls
+                if prefixed_name != f"{self.cfg.tool_prefix}{name}":
+                    # Update the prefix if we found a working alternative
+                    if prefixed_name == name:
+                        self.cfg.tool_prefix = ""
+                    elif prefixed_name.startswith("booking_com-"):
+                        self.cfg.tool_prefix = "booking_com-"
+                break  # Success, exit retry loop
+
+            # Tool not found - try next pattern
+            if r.status_code == 404 and "not found" in r.text.lower():
+                last_error = f"Tool '{prefixed_name}' not found"
+                continue
+
+            # Other error - don't retry
+            last_error = f"HTTP {r.status_code}: {r.text[:500]}"
+            break
 
         if r.status_code != 200:
-            raise Exception(f"HTTP {r.status_code}: {r.text[:500]}")
+            raise Exception(last_error or f"HTTP {r.status_code}: {r.text[:500]}")
 
         data = r.json()
 

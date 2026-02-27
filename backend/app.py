@@ -31,6 +31,8 @@ MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-6')
 
 # Store conversation history (in production, use a database)
 conversations = {}
+# Store last search parameters per conversation for better context
+last_search_params = {}
 
 # Initialize log monitor
 log_monitor = ClaudeLogMonitor("jetset-ai")
@@ -56,6 +58,18 @@ For FLIGHT searches, respond with ONLY this JSON format:
 }
 ```
 
+For DATE RANGE CLARIFICATION (when user provides a date range), respond with:
+```json
+{
+    "type": "date_range_clarification",
+    "origin": "city name",
+    "destination": "city name",
+    "date_range_start": "start date",
+    "date_range_end": "end date",
+    "response": "Ask user if they have a specific date or want to see all flights in the range"
+}
+```
+
 For GENERAL CONVERSATION (greetings, questions, etc.), respond with:
 ```json
 {
@@ -64,19 +78,36 @@ For GENERAL CONVERSATION (greetings, questions, etc.), respond with:
 }
 ```
 
+For INCOMPLETE REQUESTS (missing origin, destination, or date), respond with:
+```json
+{
+    "type": "conversation",
+    "response": "Ask the user for the missing information"
+}
+```
+
 RULES:
 1. Extract the origin and destination cities/airports from the user's message
-2. Extract the date - keep it as the user said it (e.g., "next friday", "March 15", "tomorrow")
+2. Extract the date - keep it EXACTLY as the user said it (e.g., "next friday", "this Saturday", "March 15", "tomorrow", "weekend")
 3. Default adults to 1 unless specified
 4. Default cabin_class to "ECONOMY" unless user mentions business/first class
 5. Set return_date only for round trips
 6. For greetings or non-search messages, use type "conversation"
 
+IMPORTANT DATE EXTRACTION RULES:
+- "next Friday" = the Friday of NEXT week (not this week)
+- "this Friday" or "Friday" = the upcoming Friday (this week if not passed, otherwise next week)
+- "weekend" = upcoming Saturday
+- "next weekend" = Saturday of next week
+- "tomorrow" = tomorrow's date
+- Keep the EXACT wording the user used - don't change "next Friday" to "Friday"
+
 HANDLING FOLLOW-UP QUESTIONS:
-- If the user says something like "no, next Wednesday" or "change to Thursday", look at the PREVIOUS messages to find the origin and destination, then use the NEW date
+- If the user says "no, next Wednesday" or "change to Thursday", look at the PREVIOUS search to find origin and destination, then use the NEW date
 - If the user says "what about to Singapore instead", keep the same origin and date but change the destination
 - If the user provides a completely new search like "now check Beijing to Tokyo on March 5", treat it as a fresh search
 - ALWAYS try to understand the user's intent from context
+- When in doubt, ask for clarification rather than guessing
 
 EXAMPLES:
 
@@ -150,6 +181,42 @@ User: "Thanks for your help!"
 }
 ```
 
+User: "find flights from Beijing to Singapore" (missing date)
+```json
+{
+    "type": "conversation",
+    "response": "I'd be happy to help you find flights from Beijing to Singapore! ✈️ When would you like to travel? For example, you could say 'tomorrow', 'next Friday', 'March 15', etc."
+}
+```
+
+User: "find flights to Tokyo next Monday" (missing origin)
+```json
+{
+    "type": "conversation",
+    "response": "I can help you find flights to Tokyo next Monday! ✈️ Where will you be flying from?"
+}
+```
+
+User: "find flights from New York next week" (missing destination)
+```json
+{
+    "type": "conversation",
+    "response": "Great! I can search for flights from New York next week. ✈️ Where would you like to fly to?"
+}
+```
+
+User: "flights from Beijing to Singapore from March 1 to March 5" (date range - ambiguous)
+```json
+{
+    "type": "date_range_clarification",
+    "origin": "Beijing",
+    "destination": "Singapore",
+    "date_range_start": "March 1",
+    "date_range_end": "March 5",
+    "response": "I see you're looking at March 1 to March 5. Just to clarify:\n\n1️⃣ **Specific date**: Do you have a preferred departure date within this range?\n2️⃣ **Show all**: I can show you flights on any day between March 1-5\n\nWhich would you prefer? ✈️"
+}
+```
+
 RESPOND WITH ONLY THE JSON OBJECT - NO OTHER TEXT."""
 
 
@@ -172,6 +239,12 @@ def run_flight_search(params: dict) -> dict:
 
         logger.info(f"Running flight search: {' '.join(cmd)}")
 
+        # Delete stale results file BEFORE running the search
+        # This prevents serving old data if the script crashes
+        output_file = '/tmp/jetset_flights.json'
+        if os.path.exists(output_file):
+            os.remove(output_file)
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -184,13 +257,22 @@ def run_flight_search(params: dict) -> dict:
         if result.stderr:
             logger.warning(f"Flight search stderr: {result.stderr}")
 
+        # Check if the script failed (non-zero exit code)
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+            # Extract the last meaningful line of the traceback
+            error_lines = [l for l in error_msg.split('\n') if l.strip() and not l.startswith('[')]
+            short_error = error_lines[-1] if error_lines else error_msg[:200]
+            logger.error(f"Flight search script failed (exit code {result.returncode}): {short_error}")
+            return {"error": f"Flight search failed: {short_error}", "flights": [], "summary": {}}
+
         # Read results from file
         output_file = '/tmp/jetset_flights.json'
         if os.path.exists(output_file):
             with open(output_file, 'r') as f:
                 return json.load(f)
 
-        return {"error": "No results file found", "flights": [], "summary": {}}
+        return {"error": "No results file found - search may have failed", "flights": [], "summary": {}}
 
     except subprocess.TimeoutExpired:
         logger.error("Flight search timeout")
@@ -250,7 +332,13 @@ Would you like me to search for a different date or route?"""
 
     currency = flights[0].get('currency', 'USD')
 
-    response = f"""✈️ Found **{len(flights)} flights** from {origin} to {destination} on {date}!
+    # Show user's original date request vs parsed date for transparency
+    user_date = params.get('date', '')
+    date_display = f"{date}"
+    if user_date.lower() != date.lower() and user_date.lower() not in date.lower():
+        date_display = f"{date} (you said: '{user_date}')"
+
+    response = f"""✈️ Found **{len(flights)} flights** from {origin} to {destination} on {date_display}!
 
 💰 **Best Value:** {cheapest['airline']} - ${cheapest['price']} {currency} ({_stops_text(cheapest['stops'])}, {cheapest['duration']})
 ⚡ **Fastest:** {fastest['airline']} - ${fastest['price']} {currency} ({_stops_text(fastest['stops'])}, {fastest['duration']})"""
@@ -323,7 +411,40 @@ def chat():
         # Step 1: Call Claude to extract parameters (fast, no script generation)
         logger.info("Step 1: Extracting search parameters with Claude...")
 
-        result = call_claude_with_mcp(user_message, conversations[conversation_id][:-1], system_prompt=SYSTEM_PROMPT)
+        # Build enhanced system prompt with last search context
+        enhanced_prompt = SYSTEM_PROMPT
+        if conversation_id in last_search_params:
+            last_params = last_search_params[conversation_id]
+
+            # Check if we're awaiting date range clarification
+            if last_params.get('awaiting_date_range_clarification'):
+                enhanced_prompt += f"""
+
+CONTEXT - AWAITING DATE RANGE CLARIFICATION:
+The user previously mentioned dates from {last_params.get('date_range_start')} to {last_params.get('date_range_end')} for {last_params.get('origin')} to {last_params.get('destination')}.
+
+If the user responds with:
+- A specific date (e.g., "March 3", "the 10th", "1") → Set date to that specific date
+- "show all" or "all" or "2" → Set date={last_params.get('date_range_start')} (use the start date to begin searching)
+- Any other date preference → Use the date they mention
+
+Extract the appropriate parameters for flight_search based on their response."""
+            else:
+                enhanced_prompt += f"""
+
+CONTEXT - LAST SEARCH PARAMETERS:
+- Origin: {last_params.get('origin', 'N/A')}
+- Destination: {last_params.get('destination', 'N/A')}
+- Date: {last_params.get('date', 'N/A')}
+- Adults: {last_params.get('adults', 1)}
+- Cabin Class: {last_params.get('cabin_class', 'ECONOMY')}
+
+Use these as defaults if the user refers to them implicitly (e.g., "no, next Wednesday" means same origin/destination, different date)."""
+
+        # Limit conversation history to last 10 messages for better context
+        recent_history = conversations[conversation_id][:-1][-10:]
+
+        result = call_claude_with_mcp(user_message, recent_history, system_prompt=enhanced_prompt)
 
         if not result['success']:
             raise Exception(result['error'] or 'Failed to get response from Claude')
@@ -379,13 +500,43 @@ def chat():
         assistant_message = ""
 
         if params.get('type') == 'flight_search':
-            # Run the fixed flight search script
-            logger.info("Step 3: Running fixed flight search script...")
-            flight_data = run_flight_search(params)
+            # Validate required parameters
+            missing = []
+            if not params.get('origin'):
+                missing.append('origin')
+            if not params.get('destination'):
+                missing.append('destination')
+            if not params.get('date'):
+                missing.append('date')
 
-            # Generate friendly response from results
-            logger.info("Step 4: Generating response...")
-            assistant_message = generate_flight_response(flight_data, params)
+            if missing:
+                # Missing required parameters - ask for them
+                logger.warning(f"Missing parameters: {missing}")
+                missing_str = ', '.join(missing)
+                assistant_message = f"I need a bit more information to search for flights. Could you please provide the {missing_str}? 😊"
+            else:
+                # Store these parameters as the last search
+                last_search_params[conversation_id] = params.copy()
+
+                # Run the fixed flight search script
+                logger.info("Step 3: Running fixed flight search script...")
+                flight_data = run_flight_search(params)
+
+                # Generate friendly response from results
+                logger.info("Step 4: Generating response...")
+                assistant_message = generate_flight_response(flight_data, params)
+
+        elif params.get('type') == 'date_range_clarification':
+            # User provided a date range - need clarification
+            # Store the date range context for next message
+            last_search_params[conversation_id] = {
+                'origin': params.get('origin'),
+                'destination': params.get('destination'),
+                'date_range_start': params.get('date_range_start'),
+                'date_range_end': params.get('date_range_end'),
+                'awaiting_date_range_clarification': True
+            }
+            assistant_message = params.get('response', "Please clarify your date preference.")
 
         elif params.get('type') == 'conversation':
             # Just return the conversation response

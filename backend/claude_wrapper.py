@@ -33,16 +33,17 @@ def call_claude_with_mcp(message, conversation_history=None, system_prompt=None)
         logger.info(f"Running Claude CLI: {' '.join(cmd[:5])}...")
         
         # Call Claude Code CLI using stdin for non-interactive execution
-        # Use the project root directory as working directory
+        # Auto-detect environment: /workspace (sandbox) or local project root
         project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+        working_dir = '/workspace' if os.path.exists('/workspace') else project_root
+
         result = subprocess.run(
             cmd,
             input=full_prompt,
             capture_output=True,
             text=True,
             timeout=300,  # 5 minutes timeout for flight searches
-            #cwd=project_root
-            cwd='/workspace'  # Use cwd='/workspace' for company AI agent sandbox
+            cwd=working_dir
         )
         
         if result.returncode == 0:

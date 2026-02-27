@@ -18,41 +18,74 @@ from booking_com_client import BookingCom
 
 def parse_date(date_str: str) -> str:
     """Parse various date formats and return YYYY-MM-DD format."""
+    original_str = date_str
     date_str = date_str.strip().lower()
     today = datetime.now()
 
+    print(f"[DATE PARSER] Input: '{original_str}' | Today: {today.strftime('%Y-%m-%d')} ({today.strftime('%A')})")
+
     # Handle relative dates
     if date_str in ['today', 'tonight']:
-        return today.strftime('%Y-%m-%d')
+        result = today.strftime('%Y-%m-%d')
+        print(f"[DATE PARSER] Result: {result} (today)")
+        return result
     elif date_str == 'tomorrow':
-        return (today + timedelta(days=1)).strftime('%Y-%m-%d')
-    elif 'next' in date_str:
-        # Handle "next friday", "next week", etc.
+        result = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+        print(f"[DATE PARSER] Result: {result} (tomorrow)")
+        return result
+
+    # Handle weekend
+    if 'weekend' in date_str:
+        # Weekend = upcoming Saturday
+        days_ahead = (5 - today.weekday()) % 7  # Saturday is 5
+        if days_ahead == 0:  # Today is Saturday
+            days_ahead = 7 if 'next' in date_str else 0
+        elif 'next' in date_str and days_ahead <= 1:  # "next weekend" when it's Friday/Saturday
+            days_ahead += 7
+        result = (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+        print(f"[DATE PARSER] Result: {result} (weekend)")
+        return result
+
+    # Handle "next [weekday]" - always means the instance AFTER this week's occurrence
+    if 'next' in date_str:
         weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
         for i, day in enumerate(weekdays):
             if day in date_str:
                 days_ahead = i - today.weekday()
-                if days_ahead <= 0:  # Target day already happened this week
+                # Always go to next week's occurrence
+                if days_ahead <= 0:
                     days_ahead += 7
-                return (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+                else:
+                    days_ahead += 7  # Even if it's in the future this week, "next" means next week
+                result = (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+                print(f"[DATE PARSER] Result: {result} (next {day})")
+                return result
         # "next week" = 7 days from now
         if 'week' in date_str:
-            return (today + timedelta(days=7)).strftime('%Y-%m-%d')
+            result = (today + timedelta(days=7)).strftime('%Y-%m-%d')
+            print(f"[DATE PARSER] Result: {result} (next week)")
+            return result
         # "next month" = 30 days from now
         if 'month' in date_str:
-            return (today + timedelta(days=30)).strftime('%Y-%m-%d')
+            result = (today + timedelta(days=30)).strftime('%Y-%m-%d')
+            print(f"[DATE PARSER] Result: {result} (next month)")
+            return result
 
-    # Handle weekday names (this friday, friday, etc.)
+    # Handle "this [weekday]" or just "[weekday]" - means the upcoming occurrence
     weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
     for i, day in enumerate(weekdays):
-        if day in date_str and 'next' not in date_str:
-            # "this friday" or just "friday" means the coming one
+        if day in date_str:
             days_ahead = i - today.weekday()
-            if days_ahead < 0:  # If day passed, use next week
-                days_ahead += 7
-            elif days_ahead == 0:
-                days_ahead = 7  # If today is that day, use next week
-            return (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+            if days_ahead == 0 and 'this' in date_str:
+                # "this Friday" when today IS Friday = today
+                result = today.strftime('%Y-%m-%d')
+                print(f"[DATE PARSER] Result: {result} (this {day} = today)")
+                return result
+            elif days_ahead <= 0:  # Day already passed this week
+                days_ahead += 7  # Go to next week
+            result = (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+            print(f"[DATE PARSER] Result: {result} (this {day})")
+            return result
 
     # Try to parse standard date formats
     formats = [
@@ -60,28 +93,44 @@ def parse_date(date_str: str) -> str:
         '%Y/%m/%d',       # 2026/03/06
         '%m/%d/%Y',       # 03/06/2026
         '%d/%m/%Y',       # 06/03/2026
+        '%m-%d-%Y',       # 03-06-2026
+        '%d-%m-%Y',       # 06-03-2026
         '%B %d, %Y',      # March 6, 2026
         '%b %d, %Y',      # Mar 6, 2026
         '%B %d %Y',       # March 6 2026
         '%b %d %Y',       # Mar 6 2026
         '%d %B %Y',       # 6 March 2026
         '%d %b %Y',       # 6 Mar 2026
+        '%m/%d',          # 03/06 (assume current year)
+        '%d/%m',          # 06/03 (assume current year)
+        '%B %d',          # March 6 (assume current year)
+        '%b %d',          # Mar 6 (assume current year)
     ]
 
     for fmt in formats:
         try:
             parsed = datetime.strptime(date_str, fmt)
-            return parsed.strftime('%Y-%m-%d')
+            # If no year provided, assume current year
+            if parsed.year == 1900:
+                parsed = parsed.replace(year=today.year)
+                # If date is in the past, use next year
+                if parsed < today:
+                    parsed = parsed.replace(year=today.year + 1)
+            result = parsed.strftime('%Y-%m-%d')
+            print(f"[DATE PARSER] Result: {result} (parsed from format: {fmt})")
+            return result
         except ValueError:
             continue
 
     # Default: return as-is if already in correct format, else use a week from now
     if len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+        print(f"[DATE PARSER] Result: {date_str} (already in correct format)")
         return date_str
 
     # Fallback to 7 days from now
-    print(f"WARNING: Could not parse date '{date_str}', using 7 days from now")
-    return (today + timedelta(days=7)).strftime('%Y-%m-%d')
+    result = (today + timedelta(days=7)).strftime('%Y-%m-%d')
+    print(f"[DATE PARSER] WARNING: Could not parse '{original_str}', using 7 days from now: {result}")
+    return result
 
 
 def search_flights(origin: str, destination: str, date: str, adults: int = 1,
@@ -156,8 +205,27 @@ def search_flights(origin: str, destination: str, date: str, adults: int = 1,
         return result
 
     # Step 4: Process flight results
+    # Handle case where API returns a string instead of a dict
+    if isinstance(flights_response, str):
+        try:
+            flights_response = json.loads(flights_response)
+        except (json.JSONDecodeError, TypeError):
+            result["error"] = f"Unexpected API response format (string): {str(flights_response)[:200]}"
+            return result
+
+    if not isinstance(flights_response, dict):
+        result["error"] = f"Unexpected API response type: {type(flights_response).__name__}"
+        return result
+
     data = flights_response.get('data', {})
-    flight_offers = data.get('flightOffers', [])
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except (json.JSONDecodeError, TypeError):
+            result["error"] = f"Unexpected data format in API response"
+            return result
+
+    flight_offers = data.get('flightOffers', []) if isinstance(data, dict) else []
 
     if not flight_offers:
         result["error"] = None  # Not an error, just no flights found

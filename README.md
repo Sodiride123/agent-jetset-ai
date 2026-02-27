@@ -8,15 +8,32 @@ A modern, full-stack web application that allows users to search for flights thr
 
 ## 🌟 Features
 
-- **Natural Language Processing**: Ask for flights in plain English like "Find me a flight from NYC to London next Friday under $500"
+### Core Features
+- **Natural Language Processing**: Ask for flights in plain English like "Find me a flight from NYC to London next Friday"
 - **AI-Powered Search**: Powered by Claude Code CLI with access to real-time flight data via booking.com MCP integration
 - **Conversational Interface**: Chat with JetSet, your friendly AI travel assistant
 - **Modern UI/UX**: Clean, professional design with soft gradients, rounded corners, and smooth animations
 - **Real-time Results**: Get instant flight recommendations with prices, durations, airlines, and layover information
-- **Context-Aware**: Refine searches with follow-up questions like "show me cheaper options" or "what about direct flights only?"
-- **🆕 Real-time Progress Monitoring**: See live updates as Claude Code searches for flights
-- **🆕 Enhanced Loading Experience**: Progress bars, status messages, and travel tips while you wait
-- **🆕 Claude Monitor Dashboard**: Track token usage and performance metrics on port 9010
+- **Real-time Progress Monitoring**: See live updates as Claude Code searches for flights
+- **Enhanced Loading Experience**: Progress bars, status messages, and travel tips while you wait
+
+### 🆕 Advanced Conversation Features
+- **Follow-up Questions**: Refine searches naturally - "no, next Wednesday" remembers your destination
+- **Missing Information Handling**: Guides you through incomplete requests - asks for origin, destination, or date as needed
+- **Date Range Clarification**: Understands "from March 1 to March 5" and asks if you want round-trip or flexible dates
+- **Incremental Information Gathering**: Build your search across multiple messages naturally
+
+### 🆕 Smart Date Parsing
+- **Natural Language Dates**: "tomorrow", "this Friday", "next weekend", "next Monday"
+- **15+ Date Formats**: Handles MM/DD/YYYY, DD/MM/YYYY, "March 15", and more
+- **Smart Interpretation**: Distinguishes "this Friday" vs "next Friday" intelligently
+- **Date Transparency**: Shows what date was understood - "on 2026-03-06 (you said: 'next Friday')"
+
+### 🆕 Reliability & Performance
+- **Fixed Script Architecture**: Consistent, reliable flight searches every time
+- **Cross-Environment Compatibility**: Works in local dev, sandbox, and production without config changes
+- **Fast Response Time**: File-based JSON approach eliminates 200-second waits
+- **Robust Error Handling**: Friendly messages for invalid cities, no flights found, etc.
 
 ## 🎨 Design
 
@@ -85,35 +102,29 @@ python app.py
 
 The backend will run on `http://localhost:9002`
 
-### Deployment Configuration
+### Deployment
 
-**Important:** When switching between local development and sandbox deployment, you need to update **2 files**:
+**🎉 No Configuration Needed!** The app automatically detects and adapts to different environments:
 
-#### 1. `backend/claude_wrapper.py` (Line ~44)
+- ✅ **Auto-detects working directory**: Uses `/workspace` (sandbox) or local project root automatically
+- ✅ **Auto-discovers MCP servers**: Finds the correct booking.com MCP server and tool prefix
+- ✅ **Auto-retries tool calls**: Tries multiple tool name patterns if one fails
 
-| Environment | Setting |
-|-------------|---------|
-| **Local Development** | `cwd=project_root` |
-| **Company AI Sandbox** | `cwd='/workspace'` |
+Simply deploy the code - it works in local development, sandbox, and production without changes!
 
-```python
-# For local development:
-cwd=project_root
-#cwd='/workspace'
+#### Quick Start Scripts
 
-# For company AI sandbox deployment:
-#cwd=project_root
-cwd='/workspace'
+**Production Mode** (Express server, port 3004):
+```bash
+./start.sh
 ```
 
-#### 2. `backend/app.py` - System Prompt Paths (2 places, Lines ~57 and ~72)
+**Development Mode** (Vite with hot reload, port 3002):
+```bash
+./start-dev.sh
+```
 
-| Environment | Path |
-|-------------|------|
-| **Local Development** | `cd /Users/yu.yan/code/agent-jetset-ai/backend && python3` |
-| **Company AI Sandbox** | `cd /workspace/backend && python3` |
-
-Search for `cd /Users/yu.yan/code/agent-jetset-ai/backend` and replace with `cd /workspace/backend` (or vice versa).
+See `Deploy dependencies.md` and `Deploy app.md` for detailed deployment instructions.
 
 ### MCP Configuration (for Local Development)
 
@@ -175,11 +186,46 @@ The frontend will run on `http://localhost:3002`
 
 ## 🎯 Example Queries
 
+### Basic Searches
 - "Find flights from Sydney to London next Friday"
-- "Show me weekend trips to Paris under $500"
-- "Direct flights to Tokyo in March"
+- "Show me flights to Paris this weekend"
+- "Direct flights to Tokyo tomorrow"
 - "Cheapest flights to Miami next month"
 - "Business class tickets to Dubai"
+
+### Advanced Queries (New!)
+- **Follow-ups**: "no, next Wednesday" (after initial search)
+- **Date ranges**: "flights from Beijing to Singapore from March 1 to March 5"
+- **Incomplete info**: "I want to go to Paris" → Bot asks for origin and date
+- **Natural dates**: "this Friday", "next weekend", "tomorrow"
+
+### Conversation Examples
+
+**Example 1: Follow-up**
+```
+You: "flights from Beijing to Melbourne next Friday"
+Bot: [Shows 8 flights]
+You: "no, next Wednesday"
+Bot: [Shows flights for Wednesday - remembered Beijing→Melbourne]
+```
+
+**Example 2: Date Range**
+```
+You: "flights from NYC to London from March 10 to March 15"
+Bot: "Is this round-trip or flexible one-way dates?"
+You: "round trip"
+Bot: [Shows round-trip flights]
+```
+
+**Example 3: Incremental**
+```
+You: "I want to go to Paris"
+Bot: "Where will you be flying from?"
+You: "from New York"
+Bot: "When would you like to travel?"
+You: "next Friday"
+Bot: [Shows flights NYC→Paris next Friday]
+```
 
 ## 🏗️ Architecture
 
@@ -194,42 +240,55 @@ The frontend will run on `http://localhost:3002`
   - Integrates with booking.com MCP for flight data
   - Maintains conversation context for natural dialogue
 
-### Request Workflow
+### Request Workflow (New Architecture)
 
-When a user searches for flights, the following sequence occurs:
+When a user searches for flights, the following optimized sequence occurs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Flight Search Workflow                             │
+│                    Flight Search Workflow (Optimized)                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  1. [Sonnet 4.6] Initial warmup/loading                                      │
+│  1. [User] "flights from Beijing to Melbourne next Friday"                  │
 │         ↓                                                                    │
-│  2. [Sonnet 4.6] Process user request, generate Python script                │
+│  2. [Sonnet 4.6] Extract parameters as JSON (FAST)                           │
+│         → {origin: "Beijing", dest: "Melbourne", date: "next friday"}        │
 │         ↓                                                                    │
-│  3. [Python Script] Execute booking.com API calls:                           │
-│         ├── Search destination #1 (e.g., "Sydney" → SYD.AIRPORT)             │
-│         ├── Search destination #2 (e.g., "Singapore" → SIN.CITY)             │
-│         └── Search flights between destinations                              │
+│  3. [Backend] Validate parameters (origin, destination, date present?)      │
+│         ├── Missing? → Ask user for missing info                             │
+│         └── Complete? → Continue to search                                   │
 │         ↓                                                                    │
-│  4. [Sonnet 4.6] Internal processing (Claude Code CLI optimization)          │
+│  4. [Fixed Script] flight_search.py executes:                                │
+│         ├── Parse date: "next friday" → "2026-03-06"                         │
+│         ├── Search destination: "Beijing" → PEK.AIRPORT                      │
+│         ├── Search destination: "Melbourne" → MEL.CITY                       │
+│         ├── Search flights: PEK → MEL on 2026-03-06                          │
+│         ├── Process results (max 8 flights)                                  │
+│         └── Save to /tmp/jetset_flights.json                                 │
 │         ↓                                                                    │
-│  5. [Sonnet 4.6] Generate final response with structured JSON                │
+│  5. [Backend] Read JSON file directly (FAST - no 200s wait)                 │
 │         ↓                                                                    │
-│  6. [Backend] Extract JSON from response, return to frontend                 │
+│  6. [Backend] Generate friendly response from template                      │
 │         ↓                                                                    │
 │  7. [Frontend] Render flight cards with booking links                        │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**Key Improvements:**
+- ✅ **Faster**: Claude only extracts parameters, not generates full scripts
+- ✅ **Reliable**: Fixed script = consistent results every time
+- ✅ **No 200s waits**: File-based JSON approach
+- ✅ **Smart**: Handles follow-ups, missing info, date ranges
+
 **Token Usage Example:**
-| Step | Model | Tokens | Description |
-|------|-------|--------|-------------|
-| 1-2 | Sonnet 4.6 | ~18,000 | Initial request processing |
-| 3 | python-requests | 0 | Booking.com API calls (3 requests) |
-| 4 | Sonnet 4.6 | ~7,000 | Internal optimization |
-| 5 | Sonnet 4.6 | ~30,000 | Final response generation |
+| Step | Model/Process | Tokens/Time | Description |
+|------|---------------|-------------|-------------|
+| 2 | Sonnet 4.6 | ~5,000 tokens | Parameter extraction only |
+| 3 | Backend logic | 0 tokens | Validation |
+| 4 | flight_search.py | ~30 seconds | Booking.com API calls |
+| 5-6 | Backend logic | 0 tokens | File read + template |
+| **Total** | **Sonnet 4.6** | **~5,000 tokens** | **95% reduction!** |
 
 ### Frontend (React + TypeScript)
 - **Components**:
