@@ -10,7 +10,7 @@
 
 @layer components {
   .chat-bubble {
-    @apply rounded-2xl p-4 max-w-2xl shadow-md;
+    @apply rounded-2xl p-3 md:p-4 max-w-[85%] md:max-w-2xl shadow-md;
   }
   
   .chat-bubble-user {

@@ -52,18 +52,18 @@ const FlightResults: React.FC<FlightResultsProps> = ({ flightData }) => {
       {/* Summary Stats */}
       {summary && (
         <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-6">
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-3 gap-2 md:gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-purple-600">{summary.totalResults}</div>
-              <div className="text-xs text-gray-600">Flights Found</div>
+              <div className="text-xl md:text-2xl font-bold text-purple-600">{summary.totalResults}</div>
+              <div className="text-xs text-gray-600">Flights</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-green-600">${summary.cheapestPrice}</div>
-              <div className="text-xs text-gray-600">Lowest Price</div>
+              <div className="text-xl md:text-2xl font-bold text-green-600">${summary.cheapestPrice}</div>
+              <div className="text-xs text-gray-600">Lowest</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-blue-600">{summary.fastestDuration}</div>
-              <div className="text-xs text-gray-600">Fastest Flight</div>
+              <div className="text-xl md:text-2xl font-bold text-blue-600">{summary.fastestDuration}</div>
+              <div className="text-xs text-gray-600">Fastest</div>
             </div>
           </div>
         </div>

@@ -30,14 +30,14 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled = false }
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyPress={handleKeyPress}
-        placeholder="Ask me about flights... e.g., 'Find flights from Sydney to London next Friday'"
-        className="flex-1 px-4 py-2 rounded-full focus:outline-none text-gray-700"
+        placeholder="Ask me about flights..."
+        className="flex-1 min-w-0 px-3 md:px-4 py-2 rounded-full focus:outline-none text-gray-700 text-sm md:text-base"
         disabled={disabled}
       />
       <button
         onClick={handleSend}
         disabled={disabled || !message.trim()}
-        className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 md:px-6 py-2 rounded-full font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg 
           xmlns="http://www.w3.org/2000/svg" 

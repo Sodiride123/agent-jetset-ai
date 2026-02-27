@@ -45,7 +45,7 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
 
   return (
     <div
-      className={`flight-card bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden ${flight.token ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
+      className={`flight-card bg-white rounded-xl p-4 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden ${flight.token ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
       onClick={handleClick}
       role={flight.token ? 'button' : undefined}
       tabIndex={flight.token ? 0 : undefined}
@@ -66,20 +66,20 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
       </div>
 
       {/* Header with Airline */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center text-2xl">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center text-xl md:text-2xl">
             ✈️
           </div>
           <div>
-            <h3 className="font-bold text-lg text-gray-800">{flight.airline}</h3>
+            <h3 className="font-bold text-base md:text-lg text-gray-800">{flight.airline}</h3>
             {flight.flightNumber && (
-              <span className="text-sm text-gray-500">{flight.flightNumber}</span>
+              <span className="text-xs md:text-sm text-gray-500">{flight.flightNumber}</span>
             )}
           </div>
         </div>
         <div className={`text-right ${(isCheapest || isFastest) ? 'mt-6' : ''}`}>
-          <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
             ${flight.price}
           </div>
           <div className="text-xs text-gray-500">per person</div>
@@ -87,23 +87,23 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
       </div>
 
       {/* Flight Timeline */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         {/* Departure */}
         <div className="text-center flex-shrink-0">
-          <div className="text-2xl font-bold text-gray-800">{flight.departure.time}</div>
-          <div className="text-sm font-semibold text-gray-600">{flight.departure.airport}</div>
-          <div className="text-xs text-gray-500">{flight.departure.city}</div>
+          <div className="text-lg md:text-2xl font-bold text-gray-800">{flight.departure.time}</div>
+          <div className="text-xs md:text-sm font-semibold text-gray-600">{flight.departure.airport}</div>
+          <div className="text-xs text-gray-500 hidden md:block">{flight.departure.city}</div>
         </div>
-        
+
         {/* Flight Path */}
-        <div className="flex-1 mx-6 relative">
+        <div className="flex-1 mx-2 md:mx-6 relative">
           <div className="relative h-16 flex items-center">
             {/* Line */}
             <div className="absolute w-full h-0.5 bg-gradient-to-r from-purple-300 to-blue-300"></div>
-            
+
             {/* Duration badge */}
             <div className="absolute left-1/2 transform -translate-x-1/2 -top-2">
-              <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-full px-4 py-1.5 text-xs font-semibold text-purple-700 whitespace-nowrap shadow-sm">
+              <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-full px-2 md:px-4 py-1 md:py-1.5 text-xs font-semibold text-purple-700 whitespace-nowrap shadow-sm">
                 ✈️ {flight.duration}
               </div>
             </div>
@@ -126,9 +126,9 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight }) => {
         
         {/* Arrival */}
         <div className="text-center flex-shrink-0">
-          <div className="text-2xl font-bold text-gray-800">{flight.arrival.time}</div>
-          <div className="text-sm font-semibold text-gray-600">{flight.arrival.airport}</div>
-          <div className="text-xs text-gray-500">{flight.arrival.city}</div>
+          <div className="text-lg md:text-2xl font-bold text-gray-800">{flight.arrival.time}</div>
+          <div className="text-xs md:text-sm font-semibold text-gray-600">{flight.arrival.airport}</div>
+          <div className="text-xs text-gray-500 hidden md:block">{flight.arrival.city}</div>
         </div>
       </div>
 

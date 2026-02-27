@@ -6,7 +6,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ onNewChat }) => {
   return (
-    <div className="w-80 bg-white/80 backdrop-blur-sm shadow-xl rounded-3xl p-6 flex flex-col">
+    <div className="w-full h-full md:w-80 bg-white/95 md:bg-white/80 backdrop-blur-sm shadow-xl rounded-3xl p-6 flex flex-col overflow-y-auto">
       {/* Logo and Mascot */}
       <div className="text-center mb-8">
         <img 
